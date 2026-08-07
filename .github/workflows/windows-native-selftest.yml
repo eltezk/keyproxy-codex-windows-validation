@@ -1,0 +1,29 @@
+name: Windows native self-test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-powershell-51:
+    name: Windows PowerShell 5.1
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute native self-test
+        shell: powershell
+        run: |
+          & .\keyproxy-codex-windows-native-selftest.ps1 `
+            -InstallerPath .\keyproxy-codex-install-windows.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  powershell-7:
+    name: PowerShell 7
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute native self-test
+        shell: pwsh
+        run: |
+          & .\keyproxy-codex-windows-native-selftest.ps1 `
+            -InstallerPath .\keyproxy-codex-install-windows.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
