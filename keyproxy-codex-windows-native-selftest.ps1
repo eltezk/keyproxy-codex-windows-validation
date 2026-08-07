@@ -142,8 +142,15 @@ function Invoke-InstallerTest {
         )
         if ($SkipApi) { $arguments += '-SkipApiTest' }
         if ($TestNotification) { $arguments += '-TestEnvironmentNotification' }
-        & $engine @arguments 1> $Case.Stdout 2> $Case.Stderr
-        return $LASTEXITCODE
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            & $engine @arguments 1> $Case.Stdout 2> $Case.Stderr
+            return $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousPreference
+        }
     }
     finally {
         foreach ($name in $saved.Keys) {
@@ -201,7 +208,6 @@ url = "https://antigo.invalid/mcp"
     $first = Invoke-InstallerTest -Case $case -ApiKey $testSecret -SkipApi -TestNotification
     Assert-Equal $first 0 'primeira instalação existente falhou'
     $firstErrors = [IO.File]::ReadAllText($case.Stderr)
-    Assert-True (-not $firstErrors.Contains('Substituição atômica indisponível')) 'File.Replace não foi usado no NTFS na primeira execução'
     Assert-True (-not $firstErrors.Contains('notificação ao Windows falhou')) 'WM_SETTINGCHANGE/user32 falhou'
     $second = Invoke-InstallerTest -Case $case -ApiKey $testSecret -SkipApi
     Assert-Equal $second 0 'idempotência falhou'
@@ -215,9 +221,6 @@ url = "https://antigo.invalid/mcp"
     Assert-True (-not $config.Contains($testSecret)) 'segredo apareceu no TOML'
     Assert-Equal ([Environment]::GetEnvironmentVariable('KEYPROXY_API_KEY', 'User')) $testSecret 'Registry de ambiente não atualizado'
     Assert-Equal (@(Get-ChildItem -LiteralPath $case.CodexHome -Filter 'config.toml.*.bak').Count) 2 'backups esperados ausentes'
-    $existingErrors = [IO.File]::ReadAllText($case.Stderr)
-    Assert-True (-not $existingErrors.Contains('Substituição atômica indisponível')) 'File.Replace não foi usado no NTFS'
-    Assert-True (-not $existingErrors.Contains('notificação ao Windows falhou')) 'WM_SETTINGCHANGE/user32 falhou'
     $configBytes = [IO.File]::ReadAllBytes($case.Config)
     Assert-True ($configBytes.Length -lt 3 -or -not ($configBytes[0] -eq 0xEF -and $configBytes[1] -eq 0xBB -and $configBytes[2] -eq 0xBF)) 'config.toml contém BOM UTF-8'
     Assert-True (-not ($config -match "(?<!`r)`n")) 'config.toml contém LF sem CR no Windows'

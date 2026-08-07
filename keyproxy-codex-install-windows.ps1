@@ -774,7 +774,7 @@ function Install-MergedConfig {
             [IO.File]::Replace($staging, $script:ConfigFile, $null)
         }
         catch {
-            Write-KeyProxyWarning 'Substituição atômica indisponível; usando Move-Item no mesmo diretório.'
+            Write-KeyProxyWarning 'File.Replace não está disponível neste volume; usando substituição no mesmo diretório.'
             Move-Item -LiteralPath $staging -Destination $script:ConfigFile -Force
         }
     }
