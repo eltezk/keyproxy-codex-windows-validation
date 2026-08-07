@@ -117,6 +117,7 @@ function Invoke-InstallerTest {
         [string]$DoctorFail = '',
         [string]$McpFail = '',
         [string]$ExecMode = '',
+        [string]$InstallerPayload = '',
         [switch]$TestNotification
     )
 
@@ -141,6 +142,9 @@ function Invoke-InstallerTest {
             '-TestMode', '-TestCodexPath', $Case.Codex, '-TestApiKey', $ApiKey
         )
         if ($SkipApi) { $arguments += '-SkipApiTest' }
+        if (-not [string]::IsNullOrWhiteSpace($InstallerPayload)) {
+            $arguments += @('-TestInstallerPath', $InstallerPayload)
+        }
         if ($TestNotification) { $arguments += '-TestEnvironmentNotification' }
         $previousPreference = $ErrorActionPreference
         try {
@@ -234,6 +238,35 @@ url = "https://antigo.invalid/mcp"
     Assert-True (Test-Path -LiteralPath $case.Config) 'config novo ausente'
     Assert-Equal (@([IO.File]::ReadAllText($case.EventLog) -split "`r?`n" | Where-Object { $_ -eq 'logout' }).Count) 1 'logout simulado ausente'
     [Console]::Out.WriteLine('native-fresh-api=ok')
+
+    # Codex ausente: bootstrap oficial simulado deve ocorrer antes do KeyProxy.
+    $case = New-TestCase -Root $root -Name 'bootstrap-missing'
+    Remove-Item -LiteralPath $case.Codex -Force
+    $escapedCodexPath = $case.Codex.Replace("'", "''")
+    $bootstrapPayload = Join-Path $case.Root 'official-installer.ps1'
+    $bootstrapText = @"
+`$batch = @'
+@echo off
+setlocal
+>>"%TEST_CODEX_LOG%" echo %*
+if "%~1"=="--version" (echo codex-cli bootstrap-native& exit /b 0)
+if "%~1"=="--strict-config" (echo codex-cli bootstrap-native& exit /b 0)
+if "%~1"=="doctor" (echo {"checks":{"config.load":{"details":{"model":"gpt-5.6-sol","model provider":"keyproxy"}}}}& exit /b 0)
+if "%~1"=="mcp" (echo keyproxy& exit /b 0)
+if "%~1"=="logout" (>>"%TEST_EVENT_LOG%" echo logout& exit /b 0)
+if "%~1"=="exec" (echo model: gpt-5.6-sol& echo provider: keyproxy& echo KEYPROXY_OK& exit /b 0)
+exit /b 90
+'@
+[IO.File]::WriteAllText('$escapedCodexPath', `$batch, [Text.Encoding]::ASCII)
+"@
+    Write-Utf8NoBom -Path $bootstrapPayload -Content $bootstrapText
+    $rc = Invoke-InstallerTest -Case $case -ApiKey $testSecret -SkipApi -InstallerPayload $bootstrapPayload
+    Assert-Equal $rc 0 'bootstrap nativo com Codex ausente falhou'
+    Assert-True (Test-Path -LiteralPath $case.Codex -PathType Leaf) 'bootstrap não instalou Codex falso'
+    Assert-True (Test-Path -LiteralPath $case.Config -PathType Leaf) 'KeyProxy não foi aplicado depois do bootstrap'
+    $bootstrapLog = [IO.File]::ReadAllText($case.CodexLog)
+    Assert-True ($bootstrapLog.Contains('--version')) 'Codex instalado não foi validado com --version'
+    [Console]::Out.WriteLine('native-codex-bootstrap=ok')
 
     # Rollback de config e Registry antes da validação local.
     $case = New-TestCase -Root $root -Name 'rollback'
