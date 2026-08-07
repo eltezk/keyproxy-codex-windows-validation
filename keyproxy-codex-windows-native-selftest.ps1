@@ -291,8 +291,8 @@ url = "https://antigo.invalid/mcp"
     }
 
     [Console]::Out.WriteLine('windows-native-selftest=ok')
-    [Console]::Out.WriteLine('engine={0} {1}' -f $PSVersionTable.PSEdition, $PSVersionTable.PSVersion)
-    [Console]::Out.WriteLine('windows={0}' -f [Environment]::OSVersion.VersionString)
+    [Console]::Out.WriteLine(('engine={0} {1}' -f $PSVersionTable.PSEdition, $PSVersionTable.PSVersion))
+    [Console]::Out.WriteLine(('windows={0}' -f [Environment]::OSVersion.VersionString))
 }
 finally {
     [Environment]::SetEnvironmentVariable('KEYPROXY_API_KEY', $previousUserKey, 'User')
