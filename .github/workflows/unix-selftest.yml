@@ -1,0 +1,16 @@
+name: Unix self-test
+on:
+  workflow_dispatch:
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify checksum
+        run: shasum -a 256 -c keyproxy-codex-install.sh.sha256
+      - name: Validate shell syntax
+        run: bash -n keyproxy-codex-install.sh && bash -n keyproxy-codex-unix-selftest.sh
+      - name: Execute Linux bootstrap self-test
+        env:
+          TEST_LOGIN_SHELL: /bin/bash
+        run: bash keyproxy-codex-unix-selftest.sh keyproxy-codex-install.sh
