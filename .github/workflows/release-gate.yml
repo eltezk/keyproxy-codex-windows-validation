@@ -42,14 +42,29 @@ jobs:
       - name: Verify publishable content
         shell: bash
         run: |
-          test "$(find dist/keyproxy-codex-site/UPLOAD-NO-SITE -maxdepth 1 -type f | wc -l)" -eq 4
+          upload=dist/keyproxy-codex-site/UPLOAD-NO-SITE
+          test "$(find "$upload" -maxdepth 1 -type f | wc -l)" -eq 4
+          test -f "$upload/install.sh"
+          test -f "$upload/install.sh.sha256"
+          test -f "$upload/install.ps1"
+          test -f "$upload/install.ps1.sha256"
+          (cd "$upload" && shasum -a 256 -c install.sh.sha256 && shasum -a 256 -c install.ps1.sha256)
           test -f dist/keyproxy-codex-site/LEIA-ME-PRIMEIRO.txt
           test -f dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.html
           test -f dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.md
+          grep -Fq 'curl -fLO https://keyproxyhub.store/downloads/codex/install.sh' \
+            dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
+          grep -Fq 'Invoke-WebRequest https://keyproxyhub.store/downloads/codex/install.ps1' \
+            dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
+          grep -Fq 'Quero verificar o SHA-256 antes' \
+            dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
           ! grep -ERi 'raw\.githubusercontent\.com|github\.com/eltezk|SEU-DOMINIO' \
             dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
           ! grep -ERi 'curl[^|]*\|[[:space:]]*(ba)?sh|wget[^|]*\|[[:space:]]*(ba)?sh|irm[^|]*\|[[:space:]]*iex' \
             dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
+          ! grep -ERi 'script (é|esta|está) (digitalmente )?assinado|assinatura (digital )?verificada' \
+            dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
+          ! find "$upload" -maxdepth 1 -type f -name 'keyproxy-codex-install*' -print -quit | grep -q .
       - name: Upload ready-to-publish package
         uses: actions/upload-artifact@v4
         with:

@@ -1,76 +1,99 @@
 # KeyProxy Hub + Codex CLI — pacote para o site
 
-Este repositório privado gera um pacote pronto para o proprietário do KeyProxy publicar. O fluxo é simples:
+Este repositório é privado e gera uma entrega pronta. O proprietário precisa apenas:
 
-> **Baixar um artifact → subir 4 arquivos → copiar um trecho no site.**
+> **Baixar o artifact → subir quatro arquivos → colar o HTML no portal.**
 
 ## COMECE AQUI
 
-### 1. Baixe o pacote aprovado
+### 1. Baixe a entrega aprovada
 
-1. Abra a aba **Actions** deste repositório.
-2. Abra a execução verde mais recente do workflow **Release gate** na branch `main`.
-3. Em **Artifacts**, baixe **BAIXE-E-PUBLIQUE-NO-SITE**.
-4. Extraia o arquivo baixado.
+1. Abra **Actions** neste repositório.
+2. Entre na execução verde mais recente de **Release gate** na `main`.
+3. Baixe o artifact **BAIXE-E-PUBLIQUE-NO-SITE**.
+4. Extraia o arquivo.
 
-A entrega terá esta estrutura:
+Estrutura:
 
 ```text
-keyproxy-codex-site/
-├── LEIA-ME-PRIMEIRO.txt
-├── UPLOAD-NO-SITE/
-│   ├── keyproxy-codex-install.sh
-│   ├── keyproxy-codex-install.sh.sha256
-│   ├── keyproxy-codex-install-windows.ps1
-│   └── keyproxy-codex-install-windows.ps1.sha256
-├── COPIAR-E-COLAR-NO-SITE.html
-└── COPIAR-E-COLAR-NO-SITE.md
+LEIA-ME-PRIMEIRO.txt
+UPLOAD-NO-SITE/
+├── install.sh
+├── install.sh.sha256
+├── install.ps1
+└── install.ps1.sha256
+COPIAR-E-COLAR-NO-SITE.html
+COPIAR-E-COLAR-NO-SITE.md
 ```
 
-### 2. Suba os 4 arquivos
+### 2. Suba os quatro arquivos
 
-Envie **todo o conteúdo** de `UPLOAD-NO-SITE/`, sem editar ou renomear, para:
+Envie todo o conteúdo de `UPLOAD-NO-SITE/`, sem editar, para:
 
 ```text
 https://keyproxyhub.store/downloads/codex/
 ```
 
-Ao terminar, estas URLs precisam abrir ou baixar arquivos:
+As URLs públicas finais serão:
 
 ```text
-https://keyproxyhub.store/downloads/codex/keyproxy-codex-install.sh
-https://keyproxyhub.store/downloads/codex/keyproxy-codex-install.sh.sha256
-https://keyproxyhub.store/downloads/codex/keyproxy-codex-install-windows.ps1
-https://keyproxyhub.store/downloads/codex/keyproxy-codex-install-windows.ps1.sha256
+https://keyproxyhub.store/downloads/codex/install.sh
+https://keyproxyhub.store/downloads/codex/install.sh.sha256
+https://keyproxyhub.store/downloads/codex/install.ps1
+https://keyproxyhub.store/downloads/codex/install.ps1.sha256
 ```
 
-### 3. Cole o guia no site
+### 3. Cole a página dos clientes
 
-- Se o editor do portal aceita HTML, abra `COPIAR-E-COLAR-NO-SITE.html` e copie todo o conteúdo.
-- Se o editor aceita Markdown, use `COPIAR-E-COLAR-NO-SITE.md`.
+- Portal com HTML: copie todo o conteúdo de `COPIAR-E-COLAR-NO-SITE.html`.
+- Portal com Markdown: copie `COPIAR-E-COLAR-NO-SITE.md`.
 
-Os textos já possuem as URLs finais do KeyProxy. Não é necessário substituir domínio ou editar comandos.
+Não é necessário editar URLs nem comandos.
 
-### 4. Teste antes de liberar
+## Como ficou para o cliente
 
-1. Abra as quatro URLs acima em uma janela anônima.
-2. Confirme que nenhuma URL pede login no GitHub.
-3. Use uma máquina de teste e siga exatamente o guia do cliente.
-4. Não coloque uma chave real em logs, screenshots ou tickets.
+### Instalação rápida — macOS/Linux
 
-## O que o cliente precisa fazer
+```bash
+curl -fLO https://keyproxyhub.store/downloads/codex/install.sh && bash install.sh
+```
 
-O cliente escolhe sua plataforma, copia **um único bloco**, cola no Terminal/PowerShell e informa a API key quando solicitado.
+### Instalação rápida — Windows
 
-O instalador cuida automaticamente de:
+```powershell
+Invoke-WebRequest https://keyproxyhub.store/downloads/codex/install.ps1 -OutFile install.ps1; powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
 
-1. localizar o Codex CLI;
-2. verificar `codex --version`;
-3. instalar ou reparar o Codex quando necessário;
-4. solicitar a API key sem mostrá-la;
-5. configurar exclusivamente `gpt-5.6-sol`, API e MCP KeyProxy;
-6. remover o OAuth oficial anterior;
-7. validar a configuração e testar a conexão.
+Esses comandos são curtos, mas não usam `curl | sh` nem `irm | iex`: o arquivo é salvo antes de ser executado. O portal oferece links para visualizar o script e o SHA-256, além de uma seção avançada com verificação completa.
+
+No Windows, `ExecutionPolicy Bypass` vale somente para o processo que executa o instalador. Ele não muda permanentemente a política do computador.
+
+## Por que isso transmite mais confiança
+
+O trecho pronto para o portal mostra antes da execução:
+
+- hospedagem HTTPS em `keyproxyhub.store`;
+- o que o script faz e quais configurações altera;
+- link para visualizar ou baixar cada script;
+- link para o checksum SHA-256;
+- verificação avançada opcional;
+- aviso de que a API key não aparece na tela;
+- backup e rollback da configuração local.
+
+Não diga que o script é digitalmente assinado. O release atual é validado por SHA-256 e pelos runners do GitHub Actions, mas não possui certificado Authenticode de organização.
+
+Para reduzir avisos do Windows/SmartScreen de forma adicional no futuro, será necessário adquirir um certificado de assinatura de código para a organização, assinar o `.ps1` e verificar a assinatura no release gate. Uma assinatura self-signed não deve ser apresentada aos clientes como prova de confiança.
+
+## O que os instaladores fazem
+
+1. verificam `codex --version`;
+2. instalam ou reparam o Codex CLI pelo instalador oficial quando necessário;
+3. solicitam a API key sem exibi-la;
+4. configuram somente o modelo `gpt-5.6-sol`, a API e o MCP KeyProxy;
+5. preservam preferências compatíveis e criam backup;
+6. removem o OAuth oficial anterior;
+7. validam provider, modelo, MCP e conexão;
+8. fazem rollback se a configuração local falhar.
 
 Compatibilidade:
 
@@ -80,51 +103,46 @@ Compatibilidade:
 - PowerShell 7 no Windows;
 - Windows 11 recomendado;
 - Windows 10 build 17763+ em best effort;
-- no WSL, o cliente usa o procedimento Linux.
+- WSL usa o procedimento Linux.
 
 ## NÃO FAÇA ISSO
 
-1. **Não torne este repositório público.** Clientes recebem arquivos pelo domínio KeyProxy, não pelo GitHub privado.
-2. **Não publique credenciais.** Nunca coloque API key, PAT GitHub ou senha do servidor nos scripts, no portal ou no frontend.
-3. **Não edite os quatro arquivos depois de gerar o pacote.** Qualquer alteração invalida o SHA-256.
-4. Não publique self-tests, `.github`, logs, `.env`, `scripts/` ou o histórico `.git`.
-5. Não use comandos como `curl URL | sh`, `wget URL | sh` ou `irm URL | iex`.
+1. Não torne este repositório público para distribuir os scripts.
+2. Não coloque API key, PAT GitHub ou credenciais do servidor no frontend.
+3. Não edite os quatro arquivos depois de gerar a entrega; isso invalida o SHA-256.
+4. Não publique self-tests, workflows, `.env`, logs, `scripts/` ou `.git`.
+5. Não troque os comandos por `curl URL | sh`, `wget URL | sh` ou `irm URL | iex`.
+6. Não afirme que existe assinatura digital enquanto não houver certificado e verificação Authenticode.
 
-## Se preferir gerar o pacote localmente
+## Gerar a entrega localmente
 
-Em macOS ou Linux, dentro do repositório:
+Em macOS ou Linux:
 
 ```bash
 bash scripts/build-public-bundle.sh
 ```
 
-A entrega será criada em:
+Saída:
 
 ```text
 dist/keyproxy-codex-site/
 dist/keyproxy-codex-site.zip
 ```
 
-O builder:
+O builder copia os instaladores internos como `install.sh` e `install.ps1`, gera checksums com os nomes públicos e bloqueia arquivos internos, placeholders, links privados, pipes inseguros e alegações falsas de assinatura.
 
-- copia somente os quatro arquivos públicos;
-- adiciona o guia curto e os trechos HTML/Markdown;
-- confere os dois checksums;
-- bloqueia self-tests, `.env`, logs e arquivos internos;
-- bloqueia links privados, placeholders e execução insegura por pipe.
+## Atualizar no futuro
 
-## Atualizar os instaladores no futuro
+1. Altere o instalador ou conteúdo do site em uma branch.
+2. Se alterar um instalador interno, regenere seu checksum do repositório.
+3. Revise o diff e integre na `main`.
+4. Aguarde o **Release gate** verde em Ubuntu, Windows PowerShell 5.1 e PowerShell 7.
+5. Baixe o novo artifact **BAIXE-E-PUBLIQUE-NO-SITE**.
+6. Substitua os quatro arquivos públicos juntos.
+7. Abra as quatro URLs em janela anônima.
+8. Teste o fluxo curto em uma máquina descartável.
 
-1. Altere o instalador necessário em uma branch.
-2. Regenere seu checksum.
-3. Envie a alteração e revise o diff.
-4. Integre na `main`.
-5. Aguarde o **Release gate** ficar verde em Linux, Windows PowerShell 5.1 e PowerShell 7.
-6. Baixe o novo artifact **BAIXE-E-PUBLIQUE-NO-SITE**.
-7. Substitua os quatro arquivos do site **juntos**.
-8. Abra as quatro URLs e refaça o teste do cliente.
-
-Checksums locais:
+Checksums internos do repositório:
 
 ```bash
 shasum -a 256 keyproxy-codex-install.sh > keyproxy-codex-install.sh.sha256
@@ -132,61 +150,54 @@ shasum -a 256 keyproxy-codex-install-windows.ps1 > keyproxy-codex-install-window
 bash scripts/build-public-bundle.sh
 ```
 
-O `.ps1` precisa permanecer UTF-8 sem BOM e com CRLF. Se os bytes mudarem, regenere o checksum e execute novamente o gate Windows.
+O `.ps1` interno permanece UTF-8 sem BOM e CRLF. Qualquer mudança de bytes exige novo checksum e gate Windows.
 
-## Rollback rápido
+## Rollback
 
-Mantenha uma cópia do pacote anterior aprovado.
+Guarde o artifact anterior aprovado. Se uma atualização apresentar problema:
 
-Se a nova publicação apresentar problema:
+1. restaure os quatro arquivos públicos do artifact anterior;
+2. invalide o cache de `/downloads/codex/`, se houver CDN;
+3. baixe novamente pelas URLs públicas;
+4. verifique os hashes;
+5. corrija em uma nova versão.
 
-1. substitua os quatro arquivos públicos pelos quatro arquivos do pacote anterior;
-2. limpe ou invalide o cache de `/downloads/codex/`, se houver CDN;
-3. baixe novamente os arquivos pelas URLs públicas;
-4. confirme os hashes;
-5. corrija a falha em uma nova versão, sem editar silenciosamente o pacote antigo.
+## Configuração do servidor/CDN
 
-## Como o site deve servir os arquivos
-
-Configuração recomendada:
+Recomendação:
 
 ```text
-Content-Type: application/octet-stream
-Content-Disposition: attachment; filename="NOME-DO-ARQUIVO"
+Content-Type: text/plain; charset=utf-8
 X-Content-Type-Options: nosniff
 Cache-Control: public, max-age=300, must-revalidate
 ```
 
-O CDN/storage não pode minificar, recomprimir, converter encoding ou alterar finais de linha dos scripts.
+Se `Content-Disposition` for usado, prefira `inline` para permitir que o cliente visualize o código no navegador; o comando continuará baixando normalmente. O CDN não pode minificar, converter encoding ou alterar finais de linha.
 
-### GitHub privado
-
-Links `raw.githubusercontent.com` de repositórios privados não funcionam para clientes anônimos. O GitHub permanece apenas como origem e validação. O site/CDN deve servir uma cópia dos arquivos.
-
-- Tokens GitHub ficam somente no backend/CI.
-- Nunca coloque PAT no JavaScript do portal.
-- Para checkout deste próprio repositório nos Actions, use o `GITHUB_TOKEN` já fornecido pelo GitHub.
-- Se um sistema externo precisar ler o repositório, prefira GitHub App com acesso somente a ele.
+Links `raw.githubusercontent.com` do repositório privado não funcionam para clientes. Os quatro arquivos precisam ser servidos pelo domínio KeyProxy. Tokens GitHub ficam apenas no backend/CI.
 
 ## Release gate
 
-O arquivo `.github/workflows/release-gate.yml` executa:
+`.github/workflows/release-gate.yml` valida:
 
-- Ubuntu 24.04: sintaxe Bash, checksum, self-test isolado e geração da entrega;
-- Windows PowerShell 5.1: self-test nativo e `Get-FileHash`;
-- PowerShell 7 no Windows: self-test nativo;
-- validações do HTML, Markdown, domínio, placeholders e conteúdo publicável.
+- sintaxe e self-test no Ubuntu 24.04;
+- Windows PowerShell 5.1 e `Get-FileHash`;
+- PowerShell 7 em Windows nativo;
+- entrega com exatamente quatro nomes públicos;
+- checksums públicos;
+- HTML e Markdown;
+- domínio oficial, links de inspeção e seção avançada;
+- ausência de placeholders, links privados e pipes inseguros.
 
-Os self-tests usam Codex e chave fictícios. Não dependem da conta ou chave de um cliente.
+A conta atual não oferece branch protection para repositório privado. Revisão do diff e gate verde são controles obrigatórios.
 
-A conta atual não oferece branch protection para repositório privado. Por isso, a revisão do diff e o **Release gate verde** são obrigatórios antes de publicar.
-
-## Checklist final do proprietário
+## Checklist do proprietário
 
 - [ ] Baixei o artifact verde mais recente da `main`.
-- [ ] Subi exatamente os quatro arquivos de `UPLOAD-NO-SITE/`.
-- [ ] As quatro URLs públicas funcionam sem login.
-- [ ] Colei o HTML ou Markdown pronto no portal.
-- [ ] Não adicionei nenhuma credencial ao site.
-- [ ] Testei o fluxo macOS/Linux ou Windows em ambiente descartável.
-- [ ] Mantive o pacote anterior para rollback.
+- [ ] Subi `install.sh`, `install.sh.sha256`, `install.ps1` e `install.ps1.sha256`.
+- [ ] As quatro URLs funcionam sem login.
+- [ ] Colei o HTML ou Markdown pronto.
+- [ ] Os links “Ver script” e “Ver SHA-256” funcionam.
+- [ ] Não publiquei credenciais nem aleguei assinatura digital inexistente.
+- [ ] Testei o comando curto em ambiente descartável.
+- [ ] Guardei o artifact anterior para rollback.

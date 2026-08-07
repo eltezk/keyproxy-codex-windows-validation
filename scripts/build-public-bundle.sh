@@ -10,11 +10,13 @@ if [[ "$DELIVERY" != /* ]]; then
 fi
 UPLOAD_DIR="$DELIVERY/UPLOAD-NO-SITE"
 
+readonly SOURCE_UNIX="keyproxy-codex-install.sh"
+readonly SOURCE_WINDOWS="keyproxy-codex-install-windows.ps1"
 readonly PUBLIC_FILES=(
-  keyproxy-codex-install.sh
-  keyproxy-codex-install.sh.sha256
-  keyproxy-codex-install-windows.ps1
-  keyproxy-codex-install-windows.ps1.sha256
+  install.sh
+  install.sh.sha256
+  install.ps1
+  install.ps1.sha256
 )
 readonly GUIDE_FILES=(
   LEIA-ME-PRIMEIRO.txt
@@ -25,13 +27,22 @@ readonly GUIDE_FILES=(
 rm -rf "$DELIVERY"
 mkdir -p "$UPLOAD_DIR"
 
-for file in "${PUBLIC_FILES[@]}"; do
+for file in "$SOURCE_UNIX" "$SOURCE_WINDOWS"; do
   [[ -f "$ROOT/$file" ]] || {
     printf 'Arquivo obrigatório ausente: %s\n' "$file" >&2
     exit 1
   }
-  cp "$ROOT/$file" "$UPLOAD_DIR/$file"
 done
+
+cp "$ROOT/$SOURCE_UNIX" "$UPLOAD_DIR/install.sh"
+cp "$ROOT/$SOURCE_WINDOWS" "$UPLOAD_DIR/install.ps1"
+(
+  cd "$UPLOAD_DIR"
+  shasum -a 256 install.sh > install.sh.sha256
+  shasum -a 256 install.ps1 > install.ps1.sha256
+  shasum -a 256 -c install.sh.sha256
+  shasum -a 256 -c install.ps1.sha256
+)
 
 for file in "${GUIDE_FILES[@]}"; do
   [[ -f "$ROOT/site/$file" ]] || {
@@ -41,17 +52,6 @@ for file in "${GUIDE_FILES[@]}"; do
   cp "$ROOT/site/$file" "$DELIVERY/$file"
 done
 
-(
-  cd "$UPLOAD_DIR"
-  shasum -a 256 -c keyproxy-codex-install.sh.sha256
-  expected="$(awk 'NR == 1 { print tolower($1) }' keyproxy-codex-install-windows.ps1.sha256)"
-  actual="$(shasum -a 256 keyproxy-codex-install-windows.ps1 | awk '{ print tolower($1) }')"
-  [[ "$actual" == "$expected" ]] || {
-    printf 'SHA-256 divergente para o instalador Windows.\n' >&2
-    exit 1
-  }
-)
-
 actual_count="$(find "$UPLOAD_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')"
 [[ "$actual_count" == "${#PUBLIC_FILES[@]}" ]] || {
   printf 'UPLOAD-NO-SITE deve conter exatamente %s arquivos; encontrou %s.\n' \
@@ -59,12 +59,20 @@ actual_count="$(find "$UPLOAD_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')"
   exit 1
 }
 
+for file in "${PUBLIC_FILES[@]}"; do
+  [[ -f "$UPLOAD_DIR/$file" ]] || {
+    printf 'Arquivo público esperado ausente: %s\n' "$file" >&2
+    exit 1
+  }
+done
+
 for forbidden in \
   '*selftest*' \
   '.github' \
   '.git' \
   '*.log' \
-  '.env*'; do
+  '.env*' \
+  'keyproxy-codex-install*'; do
   if find "$UPLOAD_DIR" -name "$forbidden" -print -quit | grep -q .; then
     printf 'UPLOAD-NO-SITE contém um caminho proibido: %s\n' "$forbidden" >&2
     exit 1
@@ -74,16 +82,29 @@ done
 for guide in \
   "$DELIVERY/COPIAR-E-COLAR-NO-SITE.html" \
   "$DELIVERY/COPIAR-E-COLAR-NO-SITE.md"; do
-  grep -Fq 'https://keyproxyhub.store/downloads/codex' "$guide" || {
-    printf 'O guia não contém a URL pública do KeyProxy: %s\n' "$guide" >&2
-    exit 1
-  }
+  for required in \
+    'https://keyproxyhub.store/downloads/codex/install.sh' \
+    'https://keyproxyhub.store/downloads/codex/install.sh.sha256' \
+    'https://keyproxyhub.store/downloads/codex/install.ps1' \
+    'https://keyproxyhub.store/downloads/codex/install.ps1.sha256' \
+    'Quero verificar o SHA-256 antes' \
+    'ExecutionPolicy Bypass'; do
+    grep -Fq "$required" "$guide" || {
+      printf 'O guia não contém o item obrigatório "%s": %s\n' "$required" "$guide" >&2
+      exit 1
+    }
+  done
+
   if grep -Eiq 'raw\.githubusercontent\.com|github\.com/eltezk|SEU-DOMINIO' "$guide"; then
     printf 'O guia contém URL privada ou placeholder: %s\n' "$guide" >&2
     exit 1
   fi
   if grep -Eiq 'curl[^\n|]*\|[[:space:]]*(ba)?sh|wget[^\n|]*\|[[:space:]]*(ba)?sh|irm[^\n|]*\|[[:space:]]*iex|Invoke-RestMethod[^\n|]*\|[[:space:]]*Invoke-Expression' "$guide"; then
     printf 'O guia contém execução direta de download por pipe: %s\n' "$guide" >&2
+    exit 1
+  fi
+  if grep -Eiq 'script (é|esta|está) (digitalmente )?assinado|assinatura (digital )?verificada|authenticode verificado' "$guide"; then
+    printf 'O guia alega uma assinatura que o release não comprova: %s\n' "$guide" >&2
     exit 1
   fi
 done

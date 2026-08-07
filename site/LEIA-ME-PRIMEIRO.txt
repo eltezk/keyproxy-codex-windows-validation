@@ -1,32 +1,39 @@
 KEYPROXY HUB + CODEX CLI — PUBLICAÇÃO NO SITE
 ==============================================
 
-Você precisa fazer somente isto:
+FAÇA SOMENTE ISTO
+-----------------
 
 1. Abra a pasta UPLOAD-NO-SITE.
 2. Envie os 4 arquivos dessa pasta para:
    https://keyproxyhub.store/downloads/codex/
-3. Abra COPIAR-E-COLAR-NO-SITE.html e copie todo o conteúdo para a
-   página de instalação do portal.
+3. Copie todo o conteúdo de COPIAR-E-COLAR-NO-SITE.html para a página
+   de instalação do portal. Se o portal usa Markdown, copie o arquivo .md.
 
-Se o editor do portal aceitar Markdown em vez de HTML, use:
-COPIAR-E-COLAR-NO-SITE.md
+OS 4 ARQUIVOS A ENVIAR
+----------------------
 
-Depois do upload, confirme que estas 4 URLs abrem ou baixam arquivos:
+install.sh
+install.sh.sha256
+install.ps1
+install.ps1.sha256
 
-https://keyproxyhub.store/downloads/codex/keyproxy-codex-install.sh
-https://keyproxyhub.store/downloads/codex/keyproxy-codex-install.sh.sha256
-https://keyproxyhub.store/downloads/codex/keyproxy-codex-install-windows.ps1
-https://keyproxyhub.store/downloads/codex/keyproxy-codex-install-windows.ps1.sha256
+TESTE ESTAS URLS ANTES DE LIBERAR
+---------------------------------
+
+https://keyproxyhub.store/downloads/codex/install.sh
+https://keyproxyhub.store/downloads/codex/install.sh.sha256
+https://keyproxyhub.store/downloads/codex/install.ps1
+https://keyproxyhub.store/downloads/codex/install.ps1.sha256
+
+Os comandos curtos e os links de inspeção já estão prontos no HTML/Markdown.
+Não é necessário editar o domínio ou os comandos.
 
 IMPORTANTE
 ----------
-- Envie os arquivos sem editar, renomear, compactar individualmente ou
-  alterar seus finais de linha.
+- Envie os quatro arquivos juntos e sem editar os bytes.
 - Não coloque API key, token GitHub ou credencial do servidor na página.
-- Não publique este repositório privado. Publique somente os 4 arquivos
-  dentro de UPLOAD-NO-SITE.
-- Se alguma das 4 URLs não funcionar, não libere a página aos clientes.
-
-Para uma nova versão, baixe o novo pacote aprovado e repita os mesmos
-3 passos, substituindo os 4 arquivos do site juntos.
+- Não publique o repositório privado, os self-tests ou os workflows.
+- Se uma das quatro URLs não funcionar sem login, não libere a página.
+- Para atualizar, baixe o novo artifact aprovado e substitua os quatro
+  arquivos juntos.

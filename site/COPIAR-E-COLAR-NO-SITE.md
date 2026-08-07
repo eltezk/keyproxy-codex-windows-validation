@@ -1,72 +1,68 @@
-## Instalar Codex CLI com KeyProxy Hub
+## Codex CLI com KeyProxy Hub
 
-O instalador verifica primeiro se o **Codex CLI** está funcionando. Se necessário, ele instala ou repara o Codex automaticamente. Depois, configura o modelo `gpt-5.6-sol`, a API e o MCP do KeyProxy Hub.
+**Hospedado com HTTPS em `keyproxyhub.store`**
 
-Tenha sua **API key do KeyProxy** em mãos. Quando o instalador pedir a chave, cole-a e pressione Enter. A chave não será exibida na tela.
+O instalador faz somente o necessário: verifica ou instala o Codex CLI oficial, solicita sua API key sem exibi-la e configura o modelo `gpt-5.6-sol`, a API e o MCP do KeyProxy Hub. Você pode visualizar o código antes de executar.
 
 ### macOS ou Linux
 
-Abra o **Terminal** como usuário normal — não use `sudo` nem `root` —, copie o bloco inteiro abaixo e pressione Enter:
+Abra o Terminal como usuário normal — sem `sudo` — e execute:
 
 ```bash
-set -e
-DIR="$HOME/Downloads/keyproxy-codex"
-BASE="https://keyproxyhub.store/downloads/codex"
-mkdir -p "$DIR"
-cd "$DIR"
-curl -fL "$BASE/keyproxy-codex-install.sh" -o keyproxy-codex-install.sh
-curl -fL "$BASE/keyproxy-codex-install.sh.sha256" -o keyproxy-codex-install.sh.sha256
+curl -fLO https://keyproxyhub.store/downloads/codex/install.sh && bash install.sh
+```
+
+[Ver script](https://keyproxyhub.store/downloads/codex/install.sh) · [Ver SHA-256](https://keyproxyhub.store/downloads/codex/install.sh.sha256)
+
+<details>
+<summary>Quero verificar o SHA-256 antes</summary>
+
+```bash
+curl -fLO https://keyproxyhub.store/downloads/codex/install.sh
+curl -fLO https://keyproxyhub.store/downloads/codex/install.sh.sha256
 if command -v shasum >/dev/null 2>&1; then
-  shasum -a 256 -c keyproxy-codex-install.sh.sha256
+  shasum -a 256 -c install.sh.sha256
 else
-  sha256sum -c keyproxy-codex-install.sh.sha256
+  sha256sum -c install.sh.sha256
 fi
-chmod 700 keyproxy-codex-install.sh
-./keyproxy-codex-install.sh
+bash install.sh
 ```
 
-Ao terminar, abra um novo Terminal e execute:
-
-```bash
-codex
-```
+</details>
 
 ### Windows
 
-Abra o **Windows PowerShell** ou **PowerShell 7** como usuário normal. Não use **Executar como administrador**. Copie o bloco inteiro abaixo e pressione Enter:
+Abra o PowerShell como usuário normal — sem **Executar como administrador** — e execute:
 
 ```powershell
-$ErrorActionPreference = 'Stop'
-$Dir = Join-Path $HOME 'Downloads\keyproxy-codex'
-$Base = 'https://keyproxyhub.store/downloads/codex'
-New-Item -ItemType Directory -Path $Dir -Force | Out-Null
-Set-Location $Dir
-$Script = Join-Path $Dir 'keyproxy-codex-install-windows.ps1'
-$Checksum = "$Script.sha256"
-Invoke-WebRequest -Uri "$Base/keyproxy-codex-install-windows.ps1" -OutFile $Script
-Invoke-WebRequest -Uri "$Base/keyproxy-codex-install-windows.ps1.sha256" -OutFile $Checksum
-$Expected = (Get-Content $Checksum -Raw).Split()[0].ToLowerInvariant()
-$Actual = (Get-FileHash $Script -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($Actual -ne $Expected) { throw "Falha de segurança: SHA-256 divergente. Não execute o instalador." }
-Write-Host "Arquivo verificado: $Actual"
-if ($PSVersionTable.PSEdition -eq 'Core') {
-    & pwsh.exe -NoProfile -File $Script
-} else {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Script
-}
-if ($LASTEXITCODE -ne 0) { throw "O instalador terminou com código $LASTEXITCODE." }
+Invoke-WebRequest https://keyproxyhub.store/downloads/codex/install.ps1 -OutFile install.ps1; powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Ao terminar, abra um novo PowerShell e execute:
+[Ver script](https://keyproxyhub.store/downloads/codex/install.ps1) · [Ver SHA-256](https://keyproxyhub.store/downloads/codex/install.ps1.sha256)
+
+`ExecutionPolicy Bypass` vale somente para esse processo do instalador. Ele não altera permanentemente a política do Windows. O arquivo é salvo no computador antes de ser executado e pode ser inspecionado.
+
+<details>
+<summary>Quero verificar o SHA-256 antes</summary>
 
 ```powershell
-codex
+Invoke-WebRequest https://keyproxyhub.store/downloads/codex/install.ps1 -OutFile install.ps1
+Invoke-WebRequest https://keyproxyhub.store/downloads/codex/install.ps1.sha256 -OutFile install.ps1.sha256
+$Expected = (Get-Content .\install.ps1.sha256 -Raw).Split()[0].ToLowerInvariant()
+$Actual = (Get-FileHash .\install.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($Actual -ne $Expected) { throw 'SHA-256 divergente. Não execute o instalador.' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-> **Usa WSL?** Execute o procedimento de macOS/Linux dentro da distribuição Linux. Não use o instalador PowerShell dentro do WSL.
+</details>
 
-### Precisa de ajuda?
+Quando o instalador solicitar, cole sua API key e pressione Enter. A chave não aparecerá na tela. Ao concluir, abra um novo terminal e execute `codex`.
 
-- Para trocar a API key, execute novamente o mesmo instalador.
-- Se a validação SHA-256 falhar, não execute o arquivo e contate o suporte.
+> **Usa WSL?** Execute o procedimento macOS/Linux dentro da distribuição Linux.
+
+### Transparência e segurança
+
+- Os scripts são hospedados no domínio oficial do KeyProxy e podem ser lidos antes da execução.
+- Nenhum comando baixa conteúdo diretamente para um pipe de execução.
+- O instalador cria backup da configuração existente e realiza rollback se a validação local falhar.
 - Nunca envie sua API key em tickets, mensagens ou capturas de tela.
