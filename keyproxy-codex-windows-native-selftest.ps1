@@ -261,7 +261,11 @@ exit /b 90
 "@
     Write-Utf8NoBom -Path $bootstrapPayload -Content $bootstrapText
     $rc = Invoke-InstallerTest -Case $case -ApiKey $testSecret -SkipApi -InstallerPayload $bootstrapPayload
-    Assert-Equal $rc 0 'bootstrap nativo com Codex ausente falhou'
+    if ($rc -ne 0) {
+        $bootstrapStdout = [IO.File]::ReadAllText($case.Stdout)
+        $bootstrapStderr = [IO.File]::ReadAllText($case.Stderr)
+        throw ("bootstrap nativo com Codex ausente falhou (código={0})`nSTDOUT:`n{1}`nSTDERR:`n{2}" -f $rc, $bootstrapStdout, $bootstrapStderr)
+    }
     Assert-True (Test-Path -LiteralPath $case.Codex -PathType Leaf) 'bootstrap não instalou Codex falso'
     Assert-True (Test-Path -LiteralPath $case.Config -PathType Leaf) 'KeyProxy não foi aplicado depois do bootstrap'
     $bootstrapLog = [IO.File]::ReadAllText($case.CodexLog)
