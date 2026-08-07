@@ -1,0 +1,59 @@
+<section class="keyproxy-codex-install" aria-labelledby="keyproxy-codex-title">
+  <h2 id="keyproxy-codex-title">Instalar Codex CLI com KeyProxy Hub</h2>
+  <p>O instalador verifica primeiro se o <strong>Codex CLI</strong> está funcionando. Se necessário, ele instala ou repara o Codex automaticamente. Depois, configura o modelo <code>gpt-5.6-sol</code>, a API e o MCP do KeyProxy Hub.</p>
+  <p>Tenha sua <strong>API key do KeyProxy</strong> em mãos. Quando o instalador pedir a chave, cole-a e pressione Enter. A chave não será exibida na tela.</p>
+
+  <h3>macOS ou Linux</h3>
+  <p>Abra o <strong>Terminal</strong> como usuário normal — não use <code>sudo</code> nem <code>root</code> —, copie o bloco inteiro abaixo e pressione Enter:</p>
+  <pre><code>set -e
+DIR="$HOME/Downloads/keyproxy-codex"
+BASE="https://keyproxyhub.store/downloads/codex"
+mkdir -p "$DIR"
+cd "$DIR"
+curl -fL "$BASE/keyproxy-codex-install.sh" -o keyproxy-codex-install.sh
+curl -fL "$BASE/keyproxy-codex-install.sh.sha256" -o keyproxy-codex-install.sh.sha256
+if command -v shasum &gt;/dev/null 2&gt;&amp;1; then
+  shasum -a 256 -c keyproxy-codex-install.sh.sha256
+else
+  sha256sum -c keyproxy-codex-install.sh.sha256
+fi
+chmod 700 keyproxy-codex-install.sh
+./keyproxy-codex-install.sh</code></pre>
+  <p>Ao terminar, abra um novo Terminal e execute:</p>
+  <pre><code>codex</code></pre>
+
+  <h3>Windows</h3>
+  <p>Abra o <strong>Windows PowerShell</strong> ou <strong>PowerShell 7</strong> como usuário normal. Não use <strong>Executar como administrador</strong>. Copie o bloco inteiro abaixo e pressione Enter:</p>
+  <pre><code>$ErrorActionPreference = 'Stop'
+$Dir = Join-Path $HOME 'Downloads\keyproxy-codex'
+$Base = 'https://keyproxyhub.store/downloads/codex'
+New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+Set-Location $Dir
+$Script = Join-Path $Dir 'keyproxy-codex-install-windows.ps1'
+$Checksum = "$Script.sha256"
+Invoke-WebRequest -Uri "$Base/keyproxy-codex-install-windows.ps1" -OutFile $Script
+Invoke-WebRequest -Uri "$Base/keyproxy-codex-install-windows.ps1.sha256" -OutFile $Checksum
+$Expected = (Get-Content $Checksum -Raw).Split()[0].ToLowerInvariant()
+$Actual = (Get-FileHash $Script -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($Actual -ne $Expected) { throw "Falha de segurança: SHA-256 divergente. Não execute o instalador." }
+Write-Host "Arquivo verificado: $Actual"
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    &amp; pwsh.exe -NoProfile -File $Script
+} else {
+    &amp; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Script
+}
+if ($LASTEXITCODE -ne 0) { throw "O instalador terminou com código $LASTEXITCODE." }</code></pre>
+  <p>Ao terminar, abra um novo PowerShell e execute:</p>
+  <pre><code>codex</code></pre>
+
+  <aside>
+    <p><strong>Usa WSL?</strong> Execute o procedimento de macOS/Linux dentro da distribuição Linux. Não use o instalador PowerShell dentro do WSL.</p>
+  </aside>
+
+  <h3>Precisa de ajuda?</h3>
+  <ul>
+    <li>Para trocar a API key, execute novamente o mesmo instalador.</li>
+    <li>Se a validação SHA-256 falhar, não execute o arquivo e contate o suporte.</li>
+    <li>Nunca envie sua API key em tickets, mensagens ou capturas de tela.</li>
+  </ul>
+</section>

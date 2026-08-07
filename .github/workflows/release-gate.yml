@@ -11,6 +11,7 @@ on:
       - 'keyproxy-codex-install-windows.ps1.sha256'
       - 'keyproxy-codex-unix-selftest.sh'
       - 'keyproxy-codex-windows-native-selftest.ps1'
+      - 'site/**'
       - 'scripts/build-public-bundle.sh'
       - '.github/workflows/release-gate.yml'
 
@@ -35,14 +36,25 @@ jobs:
         env:
           TEST_LOGIN_SHELL: /bin/bash
         run: bash keyproxy-codex-unix-selftest.sh keyproxy-codex-install.sh
-      - name: Build public bundle
+      - name: Build intuitive site delivery
         shell: bash
-        run: bash scripts/build-public-bundle.sh dist/public
-      - name: Upload reviewed public bundle
+        run: bash scripts/build-public-bundle.sh dist/keyproxy-codex-site
+      - name: Verify publishable content
+        shell: bash
+        run: |
+          test "$(find dist/keyproxy-codex-site/UPLOAD-NO-SITE -maxdepth 1 -type f | wc -l)" -eq 4
+          test -f dist/keyproxy-codex-site/LEIA-ME-PRIMEIRO.txt
+          test -f dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.html
+          test -f dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.md
+          ! grep -ERi 'raw\.githubusercontent\.com|github\.com/eltezk|SEU-DOMINIO' \
+            dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
+          ! grep -ERi 'curl[^|]*\|[[:space:]]*(ba)?sh|wget[^|]*\|[[:space:]]*(ba)?sh|irm[^|]*\|[[:space:]]*iex' \
+            dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
+      - name: Upload ready-to-publish package
         uses: actions/upload-artifact@v4
         with:
-          name: keyproxy-codex-public-bundle
-          path: dist/public/
+          name: BAIXE-E-PUBLIQUE-NO-SITE
+          path: dist/keyproxy-codex-site/
           if-no-files-found: error
           retention-days: 30
 

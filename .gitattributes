@@ -1,0 +1,7 @@
+*.sh text eol=lf
+*.ps1 text eol=crlf whitespace=cr-at-eol
+*.sha256 text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf

@@ -92,6 +92,24 @@ function Write-KeyProxyWarning {
     [Console]::Error.WriteLine('[KeyProxy] AVISO: {0}', $Message)
 }
 
+function Write-KeyProxyStep {
+    param(
+        [Parameter(Mandatory = $true)][int]$Number,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+    [Console]::Out.WriteLine()
+    [Console]::Out.WriteLine('[KeyProxy] Etapa {0}/5 — {1}', $Number, $Message)
+}
+
+function Show-KeyProxyBanner {
+    [Console]::Out.WriteLine()
+    [Console]::Out.WriteLine('===============================================')
+    [Console]::Out.WriteLine(' KeyProxy Hub + Codex CLI — Windows')
+    [Console]::Out.WriteLine('===============================================')
+    [Console]::Out.WriteLine('O instalador verificará o Codex, pedirá sua API key')
+    [Console]::Out.WriteLine('e configurará modelo, API e MCP automaticamente.')
+}
+
 function Stop-KeyProxyInstall {
     param(
         [Parameter(Mandatory = $true)][string]$Message,
@@ -456,13 +474,15 @@ function Read-AndStoreApiKey {
             $plainText = $TestApiKey
         }
         else {
-            $secureValue = Read-Host 'Cole sua API key do KeyProxy Hub' -AsSecureString
+            [Console]::Out.WriteLine('Cole sua API key do KeyProxy Hub e pressione Enter.')
+            [Console]::Out.WriteLine('A chave não aparecerá na tela. Pressione Ctrl+C para cancelar.')
+            $secureValue = Read-Host 'API key' -AsSecureString
             $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureValue)
             $plainText = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
         }
 
         if ([string]::IsNullOrWhiteSpace($plainText)) {
-            Stop-KeyProxyInstall 'Nenhuma API key foi informada.'
+            Stop-KeyProxyInstall 'Nenhuma API key foi informada. Obtenha uma chave no portal KeyProxy e execute novamente.'
         }
 
         Set-UserApiKey -Value $plainText
@@ -958,14 +978,21 @@ function Invoke-KeyProxyMain {
     $script:ConfigHome = [IO.Path]::GetFullPath($configuredHome)
     $script:ConfigFile = Join-Path $script:ConfigHome 'config.toml'
 
-    Write-KeyProxyInfo 'Sistema: Windows nativo'
+    Show-KeyProxyBanner
+    Write-KeyProxyInfo 'Sistema detectado: Windows nativo'
     Write-KeyProxyInfo ("Configuração Codex: {0}" -f $script:ConfigFile)
 
+    Write-KeyProxyStep -Number 1 -Message 'verificando o Codex CLI'
     Install-CodexIfNeeded
+
+    Write-KeyProxyStep -Number 2 -Message 'conferindo a configuração existente'
     Assert-SupportedExistingConfig
 
     $script:RollbackArmed = $true
+    Write-KeyProxyStep -Number 3 -Message 'salvando sua API key com segurança'
     Read-AndStoreApiKey
+
+    Write-KeyProxyStep -Number 4 -Message 'configurando modelo, API e MCP'
     Install-MergedConfig
     Validate-LocalConfiguration
     $script:RollbackArmed = $false
@@ -976,10 +1003,13 @@ function Invoke-KeyProxyMain {
         Write-KeyProxyWarning 'Não havia login oficial ativo ou o logout não foi necessário.'
     }
 
+    Write-KeyProxyStep -Number 5 -Message 'testando a conexão com o KeyProxy Hub'
     Validate-Api
 
     [Console]::Out.WriteLine()
-    Write-KeyProxyInfo 'Instalação concluída.'
+    [Console]::Out.WriteLine('===============================================')
+    [Console]::Out.WriteLine(' Instalação concluída com sucesso')
+    [Console]::Out.WriteLine('===============================================')
     Write-KeyProxyInfo ("Modelo: {0}" -f $script:KeyProxyModel)
     Write-KeyProxyInfo 'Provider: keyproxy'
     Write-KeyProxyInfo ("API: {0}" -f $script:KeyProxyBaseUrl)

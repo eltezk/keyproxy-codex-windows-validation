@@ -1,0 +1,32 @@
+KEYPROXY HUB + CODEX CLI — PUBLICAÇÃO NO SITE
+==============================================
+
+Você precisa fazer somente isto:
+
+1. Abra a pasta UPLOAD-NO-SITE.
+2. Envie os 4 arquivos dessa pasta para:
+   https://keyproxyhub.store/downloads/codex/
+3. Abra COPIAR-E-COLAR-NO-SITE.html e copie todo o conteúdo para a
+   página de instalação do portal.
+
+Se o editor do portal aceitar Markdown em vez de HTML, use:
+COPIAR-E-COLAR-NO-SITE.md
+
+Depois do upload, confirme que estas 4 URLs abrem ou baixam arquivos:
+
+https://keyproxyhub.store/downloads/codex/keyproxy-codex-install.sh
+https://keyproxyhub.store/downloads/codex/keyproxy-codex-install.sh.sha256
+https://keyproxyhub.store/downloads/codex/keyproxy-codex-install-windows.ps1
+https://keyproxyhub.store/downloads/codex/keyproxy-codex-install-windows.ps1.sha256
+
+IMPORTANTE
+----------
+- Envie os arquivos sem editar, renomear, compactar individualmente ou
+  alterar seus finais de linha.
+- Não coloque API key, token GitHub ou credencial do servidor na página.
+- Não publique este repositório privado. Publique somente os 4 arquivos
+  dentro de UPLOAD-NO-SITE.
+- Se alguma das 4 URLs não funcionar, não libere a página aos clientes.
+
+Para uma nova versão, baixe o novo pacote aprovado e repita os mesmos
+3 passos, substituindo os 4 arquivos do site juntos.

@@ -26,8 +26,18 @@ ENV_EXISTED=false
 ENV_CHANGED=false
 
 info() { printf '[KeyProxy] %s\n' "$*"; }
+step() { printf '\n[KeyProxy] Etapa %s/5 — %s\n' "$1" "$2"; }
 warn() { printf '[KeyProxy] AVISO: %s\n' "$*" >&2; }
 die() { printf '[KeyProxy] ERRO: %s\n' "$*" >&2; exit 1; }
+
+show_banner() {
+  printf '\n'
+  printf '===============================================\n'
+  printf ' KeyProxy Hub + Codex CLI — macOS/Linux\n'
+  printf '===============================================\n'
+  printf 'O instalador verificará o Codex, pedirá sua API key\n'
+  printf 'e configurará modelo, API e MCP automaticamente.\n'
+}
 
 usage() {
   cat <<'HELP'
@@ -494,10 +504,12 @@ shell_quote() {
 
 store_api_key() {
   local api_key env_dir
-  printf 'Cole sua API key do KeyProxy Hub: '
+  printf 'Cole sua API key do KeyProxy Hub e pressione Enter.\n'
+  printf 'A chave não aparecerá na tela. Pressione Ctrl+C para cancelar.\n'
+  printf 'API key: '
   IFS= read -r -s api_key
   printf '\n'
-  [[ -n "$api_key" ]] || die "Nenhuma API key foi informada."
+  [[ -n "$api_key" ]] || die "Nenhuma API key foi informada. Obtenha uma chave no portal KeyProxy e execute novamente."
 
   env_dir="$(dirname "$ENV_FILE")"
   if [[ ! -d "$env_dir" ]]; then
@@ -646,17 +658,23 @@ main() {
   KEYPROXY_DIR="$HOME/.config/keyproxy"
   ENV_FILE="$(resolve_file_symlink "$KEYPROXY_DIR/env")"
 
-  info "Sistema: $PLATFORM"
+  show_banner
+  info "Sistema detectado: $PLATFORM"
   info "Configuração Codex: $CONFIG_FILE"
-  info "Perfil do shell: $SHELL_PROFILE"
 
+  step 1 "verificando o Codex CLI"
   install_codex_if_needed
   assert_codex_available
+
+  step 2 "conferindo a configuração existente"
   validate_existing_config
   validate_existing_profile
 
   ROLLBACK_ARMED=true
+  step 3 "salvando sua API key com segurança"
   store_api_key
+
+  step 4 "configurando modelo, API e MCP"
   merge_config
   update_shell_profile
   validate_local_configuration
@@ -665,10 +683,13 @@ main() {
   info "Removendo o login OAuth oficial do Codex para uso exclusivo do KeyProxy."
   codex logout >/dev/null 2>&1 || warn "Não havia login oficial ativo ou o logout não foi necessário."
 
+  step 5 "testando a conexão com o KeyProxy Hub"
   validate_api
 
   printf '\n'
-  info "Instalação concluída."
+  printf '===============================================\n'
+  printf ' Instalação concluída com sucesso\n'
+  printf '===============================================\n'
   info "Modelo: $KEYPROXY_MODEL"
   info "Provider: keyproxy"
   info "API: $KEYPROXY_BASE_URL"
@@ -676,8 +697,8 @@ main() {
   info "Configuração: $CONFIG_FILE"
   info "Credencial: $ENV_FILE (permissão 600)"
   [[ -n "$BACKUP_FILE" ]] && info "Backup: $BACKUP_FILE"
-  info "Carregue o shell: source $SHELL_PROFILE"
-  info "Depois execute: codex"
+  info "Próximo passo: abra um novo Terminal e execute: codex"
+  info "Para usar neste Terminal agora: source $SHELL_PROFILE"
 }
 
 main
