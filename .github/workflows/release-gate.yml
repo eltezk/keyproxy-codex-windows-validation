@@ -1,0 +1,78 @@
+name: Release gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'keyproxy-codex-install.sh'
+      - 'keyproxy-codex-install.sh.sha256'
+      - 'keyproxy-codex-install-windows.ps1'
+      - 'keyproxy-codex-install-windows.ps1.sha256'
+      - 'keyproxy-codex-unix-selftest.sh'
+      - 'keyproxy-codex-windows-native-selftest.ps1'
+      - 'scripts/build-public-bundle.sh'
+      - '.github/workflows/release-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  unix:
+    name: Ubuntu 24.04
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate Bash syntax and checksum
+        shell: bash
+        run: |
+          bash -n keyproxy-codex-install.sh
+          bash -n keyproxy-codex-unix-selftest.sh
+          bash -n scripts/build-public-bundle.sh
+          shasum -a 256 -c keyproxy-codex-install.sh.sha256
+      - name: Execute isolated Unix self-test
+        shell: bash
+        env:
+          TEST_LOGIN_SHELL: /bin/bash
+        run: bash keyproxy-codex-unix-selftest.sh keyproxy-codex-install.sh
+      - name: Build public bundle
+        shell: bash
+        run: bash scripts/build-public-bundle.sh dist/public
+      - name: Upload reviewed public bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyproxy-codex-public-bundle
+          path: dist/public/
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-powershell-51:
+    name: Windows PowerShell 5.1
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - name: Execute isolated native self-test
+        shell: powershell
+        run: |
+          & .\keyproxy-codex-windows-native-selftest.ps1 `
+            -InstallerPath .\keyproxy-codex-install-windows.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify Windows SHA-256
+        shell: powershell
+        run: |
+          $expected = (Get-Content .\keyproxy-codex-install-windows.ps1.sha256 -Raw).Split()[0].ToLowerInvariant()
+          $actual = (Get-FileHash .\keyproxy-codex-install-windows.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "SHA-256 divergente: $actual" }
+          Write-Output "windows-get-filehash=ok $actual"
+
+  powershell-7:
+    name: PowerShell 7
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - name: Execute isolated native self-test
+        shell: pwsh
+        run: |
+          & .\keyproxy-codex-windows-native-selftest.ps1 `
+            -InstallerPath .\keyproxy-codex-install-windows.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
