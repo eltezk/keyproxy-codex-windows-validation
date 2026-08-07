@@ -5,6 +5,9 @@ set -Eeuo pipefail
 
 ROOT="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DELIVERY="${1:-$ROOT/dist/keyproxy-codex-site}"
+if [[ "$DELIVERY" != /* ]]; then
+  DELIVERY="$ROOT/$DELIVERY"
+fi
 UPLOAD_DIR="$DELIVERY/UPLOAD-NO-SITE"
 
 readonly PUBLIC_FILES=(
