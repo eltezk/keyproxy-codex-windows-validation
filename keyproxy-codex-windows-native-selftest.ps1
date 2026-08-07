@@ -298,3 +298,5 @@ finally {
     [Environment]::SetEnvironmentVariable('KEYPROXY_API_KEY', $previousUserKey, 'User')
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+exit 0
