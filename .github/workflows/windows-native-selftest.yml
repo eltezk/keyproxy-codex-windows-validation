@@ -15,6 +15,13 @@ jobs:
           & .\keyproxy-codex-windows-native-selftest.ps1 `
             -InstallerPath .\keyproxy-codex-install-windows.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify SHA-256 with Get-FileHash
+        shell: powershell
+        run: |
+          $expected = (Get-Content .\keyproxy-codex-install-windows.ps1.sha256 -Raw).Split()[0].ToLowerInvariant()
+          $actual = (Get-FileHash .\keyproxy-codex-install-windows.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "SHA-256 divergente: $actual" }
+          Write-Output "windows-get-filehash=ok $actual"
 
   powershell-7:
     name: PowerShell 7
