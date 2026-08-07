@@ -274,15 +274,19 @@ function Refresh-ProcessPath {
 function Install-CodexIfNeeded {
     $script:CodexExecutable = Get-CodexExecutable
     if (-not [string]::IsNullOrWhiteSpace($script:CodexExecutable)) {
-        Assert-CodexAvailable
-        return
+        $versionResult = Invoke-Codex -Arguments @('--version')
+        if ($versionResult.ExitCode -eq 0 -and $versionResult.Output.Count -gt 0) {
+            Write-KeyProxyInfo ('Codex CLI já está instalado e funcional: {0}' -f $versionResult.Output[0])
+            return
+        }
+        Write-KeyProxyWarning 'O comando codex existe, mas codex --version falhou; o instalador oficial será executado para reparar a instalação.'
     }
 
     if ($SkipCodexInstall) {
-        Stop-KeyProxyInstall 'Codex CLI não encontrado e -SkipCodexInstall foi informado.'
+        Stop-KeyProxyInstall 'Codex CLI ausente ou inválido e -SkipCodexInstall foi informado.'
     }
 
-    Write-KeyProxyInfo 'Codex CLI não encontrado; baixando o instalador oficial.'
+    Write-KeyProxyInfo 'Codex CLI não encontrado ou inválido; baixando o instalador oficial.'
     $installer = Join-Path $script:TemporaryRoot 'codex-install.ps1'
 
     if ($TestMode -and -not [string]::IsNullOrWhiteSpace($TestInstallerPath)) {
