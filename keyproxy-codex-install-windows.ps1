@@ -337,8 +337,9 @@ function Install-CodexIfNeeded {
     }
 
     if ($TestMode) {
+        $LASTEXITCODE = 0
         & $installer
-        if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+        if ($LASTEXITCODE -ne 0) {
             Stop-KeyProxyInstall 'O instalador Codex de teste falhou.'
         }
     }
