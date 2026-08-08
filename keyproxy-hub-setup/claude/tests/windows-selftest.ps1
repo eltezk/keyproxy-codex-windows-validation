@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $Root = Split-Path -Parent $PSScriptRoot
 $Temp = Join-Path ([IO.Path]::GetTempPath()) ('keyproxy-claude-' + [guid]::NewGuid())

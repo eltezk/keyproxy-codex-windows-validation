@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 Executa testes nativos e isolados do instalador KeyProxy para Windows.
 Não usa Codex real, não acessa rede e restaura KEYPROXY_API_KEY em finally.

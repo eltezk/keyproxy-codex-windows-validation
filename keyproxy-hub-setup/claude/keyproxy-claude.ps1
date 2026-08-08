@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Position=0)][ValidateSet('install','open','list','status','revert','reset','help')][string]$Command,
     [Parameter(ValueFromRemainingArguments=$true)][string[]]$RemainingArgs,

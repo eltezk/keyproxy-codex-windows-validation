@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
 Orquestra com segurança os módulos KeyProxy para Claude Code e Codex CLI.

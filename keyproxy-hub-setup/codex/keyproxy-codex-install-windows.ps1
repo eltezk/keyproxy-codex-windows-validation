@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
 Configura o KeyProxy Hub no Codex CLI nativo para Windows.
