@@ -1,5 +1,7 @@
 *.sh text eol=lf
 *.ps1 text eol=lf whitespace=cr-at-eol
+*.py text eol=lf
+keyproxy-claude text eol=lf
 *.sha256 text eol=lf
 *.md text eol=lf
 *.html text eol=lf

@@ -297,7 +297,12 @@ exit $exitCode
         $engine = (Get-Process -Id $PID).Path
         $quotedRunnerFile = '"{0}"' -f $runnerFile
         $process = Start-Process -FilePath $engine -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', $quotedRunnerFile) -RedirectStandardOutput $outputFile -Wait:$false -PassThru
-        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+        while (-not $process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
+            Start-Sleep -Milliseconds 100
+            $process.Refresh()
+        }
+        if (-not $process.HasExited) {
             # O runner e o Codex abaixo dele foram iniciados por esta chamada; encerre só essa árvore.
             $taskkill = Join-Path $env:SystemRoot 'System32\taskkill.exe'
             if (Test-Path -LiteralPath $taskkill -PathType Leaf) {
@@ -309,6 +314,7 @@ exit $exitCode
             }
             return [PSCustomObject]@{ ExitCode = 124; TimedOut = $true; Output = @(); Text = '' }
         }
+        $process.Refresh()
         $text = if (Test-Path -LiteralPath $outputFile) { [IO.File]::ReadAllText($outputFile) } else { '' }
         $lines = @($text -split "`r?`n" | Where-Object { $_ -ne '' })
         return [PSCustomObject]@{

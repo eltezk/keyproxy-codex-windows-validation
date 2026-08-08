@@ -76,7 +76,8 @@ if "%~1"=="exec" (
     exit /b 0
   )
   if /I "%TEST_EXEC_MODE%"=="timeout" (
-    timeout /t 3 /nobreak >nul
+    rem timeout.exe pode retornar imediatamente em sessões não interativas.
+    ping 127.0.0.1 -n 4 >nul
   )
   echo model: gpt-5.6-sol
   echo provider: keyproxy
