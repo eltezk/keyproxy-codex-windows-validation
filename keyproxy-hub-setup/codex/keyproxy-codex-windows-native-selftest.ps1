@@ -162,7 +162,13 @@ function Invoke-InstallerTest {
         try {
             $ErrorActionPreference = 'Continue'
             & $engine @arguments 1> $Case.Stdout 2> $Case.Stderr
-            return $LASTEXITCODE
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -ne 0) {
+                $stdout = [IO.File]::ReadAllText($Case.Stdout)
+                $stderr = [IO.File]::ReadAllText($Case.Stderr)
+                [Console]::Error.WriteLine("Instalador retornou {0}. STDOUT:`n{1}`nSTDERR:`n{2}" -f $exitCode, $stdout, $stderr)
+            }
+            return $exitCode
         }
         finally {
             $ErrorActionPreference = $previousPreference

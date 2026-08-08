@@ -17,7 +17,7 @@ a4b95d56782ad58da78fae486f38550bd9f7302542cf0b16fd3db3a9a1f41526  ./claude/rever
 b1c60046793d02274307c9a04c97baac61ff89bee617cccd0402b1cd49bb30e8  ./codex/keyproxy-codex-install-windows.ps1
 4e0887b6aece278333ee430bddc5b462445b3a37e76d2d6ded6f92ba49f28ece  ./codex/keyproxy-codex-install.sh
 9bb91aa48b3e410ac59e9f7a4422d58c2ed77c9430b50e3c4f2c2c50bea8eb67  ./codex/keyproxy-codex-unix-selftest.sh
-ba42a4efbcc46cc00b088de1d510c7b6db8ad2b03fb942dc08838d8ffb02671c  ./codex/keyproxy-codex-windows-native-selftest.ps1
+604ac155b2c90904b0c4a8ff6bee940b35bf95447228ed8ba1cb67ab78370bdf  ./codex/keyproxy-codex-windows-native-selftest.ps1
 b05b44ac8d06e62f237910c1a48171d469441e1d1da967703f94886bcfc106fe  ./keyproxy-hub.ps1
 51466e7a028720e2eea05920cf2bf83b8f456d58d4275793248309265863e2bb  ./keyproxy-hub.sh
 c7f585f67616aafeb6bc53ef65dde3c7e70a8a0380275cb42724035fb0609c6f  ./scripts/build-package.sh
