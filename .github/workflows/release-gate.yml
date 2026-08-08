@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
+    paths: &release_paths
       - 'keyproxy-codex-install.sh'
       - 'keyproxy-codex-install.sh.sha256'
       - 'keyproxy-codex-install-windows.ps1'
@@ -15,6 +15,9 @@ on:
       - 'scripts/build-public-bundle.sh'
       - 'keyproxy-hub-setup/**'
       - '.github/workflows/release-gate.yml'
+  pull_request:
+    branches: [main]
+    paths: *release_paths
 
 permissions:
   contents: read
