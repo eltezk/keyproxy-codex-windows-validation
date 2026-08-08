@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $BaseUrl = 'https://api.keyproxyhub.store/v1'
 $ModelsUrl = 'https://painel.keyproxyhub.store/v1/models'
 $McpServer = [pscustomobject]@{ type = 'http'; url = 'https://api.keyproxyhub.store/mcp'; headers = [pscustomobject]@{ Authorization = 'Bearer ${KEYPROXY_API_KEY}' } }
-$Models = @('auto','gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna','gpt-5.5','gpt-5.4','gpt-5.4-mini','gpt-5.3-codex','gpt-5.3-codex-xhigh','gpt-5.3-codex-high','gpt-5.3-codex-low','gpt-5.3-codex-none','gpt-5.3-codex-spark')
+$Models = @('auto','gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna','gpt-5.5','gpt-5.4','gpt-5.4-mini','gpt-5.3-codex','gpt-5.3-codex-xhigh','gpt-5.3-codex-high','gpt-5.3-codex-low','gpt-5.3-codex-none')
 $SettingsPath = Join-Path $ConfigDir 'settings.json'
 $StateDir = Join-Path $ConfigDir 'keyproxy-claude'
 $StatePath = Join-Path $StateDir 'state.json'

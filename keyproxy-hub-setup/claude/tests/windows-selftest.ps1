@@ -26,7 +26,7 @@ try {
 
     & (Join-Path $Root 'keyproxy-claude.ps1') install -ConfigDir $Config -InstallBin $Bin -ClaudeJson $ClaudeJson | Out-Null
     $settings = Get-Content (Join-Path $Config 'settings.json') -Raw | ConvertFrom-Json
-    if ($settings.language -ne 'Portugues, Brasil' -or $settings.env.KEEP_ME -ne 'yes' -or $settings.availableModels.Count -ne 13) { throw 'Falha no merge' }
+    if ($settings.language -ne 'Portugues, Brasil' -or $settings.env.KEEP_ME -ne 'yes' -or $settings.availableModels.Count -ne 12) { throw 'Falha no merge' }
     if ($settings.env.KEYPROXY_API_KEY -ne 'kp_test_not_real' -or $settings.env.ANTHROPIC_AUTH_TOKEN -ne 'kp_test_not_real') { throw 'Credenciais gerenciadas divergentes' }
     if ($settings.env.KEYPROXY_MODELS_URL -ne 'https://painel.keyproxyhub.store/v1/models') { throw 'Endpoint de catálogo incorreto' }
     if ($settings.env.CLAUDE_CODE_SUBAGENT_MODEL -ne 'inherit') { throw 'Subagentes não herdam a sessão' }
@@ -60,7 +60,16 @@ try {
     if ($status -notmatch 'Configuração: KeyProxy ativa' -or $status -notmatch 'MCP KeyProxy: configurado' -or $status -match 'kp_test_not_real') { throw 'Status inválido ou expôs segredo' }
     $env:CLAUDE_CONFIG_DIR = Join-Path $Temp 'config-incorreta'
     $listed = @(& (Join-Path $Root 'keyproxy-claude.ps1') list -ConfigDir $Config -InstallBin $Bin 3>$null)
-    if ($listed.Count -ne 12) { throw 'O launcher ignorou ConfigDir explícito' }
+    if ($listed.Count -ne 11) { throw 'O launcher ignorou ConfigDir explícito' }
+    $modelSources = @(
+        (Join-Path $Config 'settings.json'),
+        (Join-Path $Bin 'keyproxy-claude.ps1'),
+        (Join-Path $Root 'lib\keyproxy_claude_config.py'),
+        (Join-Path $Root 'bin\keyproxy-claude'),
+        (Join-Path $Root 'bin\keyproxy-claude.ps1'),
+        (Join-Path $Root 'install.ps1')
+    )
+    if (@($modelSources | Where-Object { (Get-Content -LiteralPath $_ -Raw) -match 'codex-spark' }).Count -ne 0) { throw 'Identificador de modelo proibido encontrado' }
     $env:CLAUDE_CONFIG_DIR = $Config
     & (Join-Path $Root 'revert.ps1') -DryRun -ConfigDir $Config -ClaudeJson $ClaudeJson | Out-Null
     & (Join-Path $Root 'keyproxy-claude.ps1') revert -ConfigDir $Config -InstallBin $Bin -ClaudeJson $ClaudeJson | Out-Null

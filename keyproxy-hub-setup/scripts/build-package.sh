@@ -35,6 +35,9 @@ rm -f "$ZIP_PATH"
   cd "$STAGING"
   zip -qr "$ZIP_PATH" "$PACKAGE_NAME"
 )
-shasum -a 256 "$ZIP_PATH" > "$ZIP_PATH.sha256"
+(
+  cd "$OUTPUT_DIR"
+  shasum -a 256 "$PACKAGE_NAME.zip" > "$PACKAGE_NAME.zip.sha256"
+)
 printf 'package=%s\n' "$ZIP_PATH"
 printf 'checksum=%s.sha256\n' "$ZIP_PATH"

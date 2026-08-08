@@ -68,7 +68,7 @@ Windows:
 
 - API: `https://api.keyproxyhub.store/v1`;
 - principal: `gpt-5.6-sol`;
-- allowlist com os 13 IDs anunciados pelo KeyProxy;
+- allowlist com os 12 IDs aprovados pelo KeyProxy;
 - aliases internos do Claude Code apontando somente para IDs KeyProxy;
 - subagentes, agent teams e workflows herdando o modelo da sessão;
 - catálogo autenticado: `https://painel.keyproxyhub.store/v1/models`;
@@ -112,7 +112,7 @@ Dentro de uma sessão existente também é possível usar o ID exato:
 
 ## Situação real dos modelos
 
-A API anuncia 13 IDs. O seletor não oferece `auto` como escolha concreta.
+A allowlist atual contém 12 IDs. O seletor não oferece `auto` como escolha concreta.
 
 **Validados no protocolo completo do Claude Code:**
 
@@ -121,10 +121,9 @@ A API anuncia 13 IDs. O seletor não oferece `auto` como escolha concreta.
 - `gpt-5.6-luna`;
 - `gpt-5.5`;
 - `gpt-5.4`;
-- `gpt-5.4-mini`;
-- `gpt-5.3-codex-spark`.
+- `gpt-5.4-mini`.
 
-`gpt-5.3-codex-spark` permanece como opção manual validada, mas não é usado por nenhum alias automático. Em sessões onde ele apresentou chamadas de ferramenta inválidas ou indisponibilidade, selecione outro modelo permitido com o seletor ou `/model`.
+Modelos que não funcionam de forma confiável com chamadas de ferramentas ou subagentes são excluídos integralmente da allowlist e do seletor.
 
 **Anunciados pelo gateway, mas atualmente incompatíveis nesse fluxo:**
 
@@ -148,13 +147,13 @@ A instalação define `CLAUDE_CODE_SUBAGENT_MODEL=inherit`. Assim, subagentes, a
 - `haiku` → `gpt-5.6-luna`;
 - `custom` → `gpt-5.5`.
 
-A allowlist de 13 IDs e `enforceAvailableModels=true` evitam a seleção normal de modelos fora do KeyProxy. Um custom agent ou workflow escrito manualmente com um ID oficial fixo não é traduzido silenciosamente: ele deve ser recusado pela allowlist. Para herança garantida, omita `model` ou use `model: inherit` nas definições customizadas.
+A allowlist de 12 IDs e `enforceAvailableModels=true` evitam a seleção normal de modelos fora do KeyProxy. Um custom agent ou workflow escrito manualmente com um ID oficial fixo não é traduzido silenciosamente: ele deve ser recusado pela allowlist. Para herança garantida, omita `model` ou use `model: inherit` nas definições customizadas.
 
 A validação controlada do pacote confirmou uma sessão `gpt-5.6-sol`, chamada MCP e criação de subagente via `Agent`. O runtime informa o modelo da sessão; não fornece, em todos os formatos de evento, um comprovante separado do identificador interno de cada chamada do subagente. Por isso a garantia é baseada em `inherit`, aliases KeyProxy e allowlist, não em uma alegação de telemetria inexistente.
 
 ## Limitação do picker nativo
 
-No Claude Code 2.1.224, a descoberta de gateway mantém somente IDs contendo `claude` ou `anthropic`. Como os IDs KeyProxy começam com `gpt-`, os 13 não aparecem automaticamente como linhas separadas no `/model`. `ANTHROPIC_CUSTOM_MODEL_OPTION` também permite somente uma entrada adicional.
+No Claude Code 2.1.224, a descoberta de gateway mantém somente IDs contendo `claude` ou `anthropic`. Como os IDs KeyProxy começam com `gpt-`, os 12 não aparecem automaticamente como linhas separadas no `/model`. `ANTHROPIC_CUSTOM_MODEL_OPTION` também permite somente uma entrada adicional.
 
 Por isso o pacote combina aliases distintos no picker nativo com o seletor externo `keyproxy-claude`.
 

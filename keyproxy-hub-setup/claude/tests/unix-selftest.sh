@@ -45,7 +45,10 @@ assert claude['mcpServers']['keyproxy']=={'type':'http','url':'https://api.keypr
 assert 'kp_test_not_real' not in open(sys.argv[2],encoding='utf-8').read()
 PY
 count="$(bash "$ROOT/keyproxy-claude.sh" list 2>/dev/null | wc -l | tr -d ' ')"
-[[ "$count" == 12 ]]
+[[ "$count" == 11 ]]
+! grep -Fq 'codex-spark' "$CLAUDE_CONFIG_DIR/settings.json" "$KEYPROXY_INSTALL_BIN/keyproxy-claude" "$ROOT/lib/keyproxy_claude_config.py" "$ROOT/bin/keyproxy-claude" "$ROOT/bin/keyproxy-claude.ps1" "$ROOT/install.ps1" || {
+  printf 'Identificador de modelo proibido encontrado.\n' >&2; exit 1
+}
 status="$(bash "$ROOT/keyproxy-claude.sh" status 2>/dev/null)"
 grep -Fq 'Configuração: KeyProxy ativa' <<<"$status"
 grep -Fq 'Credencial: configurada e ocultada' <<<"$status"
@@ -73,7 +76,7 @@ state_hash_after="$(shasum -a 256 "$CLAUDE_CONFIG_DIR/keyproxy-claude/state.json
 python3 - <<'PY'
 import json,os
 p=os.path.join(os.environ['CLAUDE_CONFIG_DIR'],'settings.json')
-d=json.load(open(p)); assert d['language']=='Portugues, Brasil'; assert d['env']['KEEP_ME']=='yes'; assert len(d['availableModels'])==13
+d=json.load(open(p)); assert d['language']=='Portugues, Brasil'; assert d['env']['KEEP_ME']=='yes'; assert len(d['availableModels'])==12
 PY
 bash "$ROOT/revert.sh" --dry-run > "$TMP/revert-dry.log"
 grep -Fq 'dry-run=ok' "$TMP/revert-dry.log"

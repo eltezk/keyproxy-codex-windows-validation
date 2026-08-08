@@ -74,6 +74,8 @@ $script:ConfigHome = $null
 $script:ConfigFile = $null
 $script:TemporaryRoot = $null
 $script:BackupFile = $null
+$script:StateFile = $null
+$script:StateCreated = $false
 $script:ConfigExisted = $false
 $script:ConfigInstalled = $false
 $script:PreviousUserApiKey = $null
@@ -137,11 +139,12 @@ O instalador:
   2. solicita a API key sem exibi-la;
   3. persiste KEYPROXY_API_KEY no ambiente do usuário Windows;
   4. mescla provider, modelo e MCP no config.toml ativo;
-  5. cria backup e valida o TOML;
-  6. testa modelo, provider, MCP e uma resposta real;
+  5. cria backup e manifesto local de recuperação do KeyProxy;
+  6. testa modelo, provider, MCP e uma resposta real com prazo limitado;
   7. executa codex logout somente após a validação de conexão.
 
-Com -SkipApiTest, o login OAuth oficial é preservado.
+Com -SkipApiTest, o login OAuth oficial é preservado. Falhas de API, MCP ou
+prazo também preservam o login OAuth oficial.
 
 Configuração ativa:
   %CODEX_HOME%\config.toml, quando CODEX_HOME estiver definido;
@@ -151,10 +154,11 @@ Rotação:
   Execute este instalador novamente e informe a nova API key.
 
 Rollback:
-  Copy-Item 'C:\caminho\config.toml.DATA.PID.bak' "$env:USERPROFILE\.codex\config.toml" -Force
+  Confira o manifesto restrito %CODEX_HOME%\keyproxy-codex-state.json e
+  restaure manualmente apenas o backup indicado no campo configBackup.
 
 Desinstalação manual:
-  1. restaure o backup ou remova as seções KeyProxy do config.toml;
+  1. restaure o backup indicado pelo manifesto KeyProxy ou remova as seções;
   2. remova a variável do usuário:
      [Environment]::SetEnvironmentVariable('KEYPROXY_API_KEY', $null, 'User')
 
@@ -242,28 +246,77 @@ function Get-CodexExecutable {
 }
 
 function Invoke-Codex {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [int]$TimeoutSeconds = 0
+    )
 
     if ([string]::IsNullOrWhiteSpace($script:CodexExecutable)) {
         Stop-KeyProxyInstall 'Executável Codex não foi inicializado.'
     }
 
-    $previousPreference = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = 'Continue'
-        $output = @(& $script:CodexExecutable @Arguments 2>&1 | ForEach-Object { $_.ToString() })
-        $exitCode = $LASTEXITCODE
-        if ($null -eq $exitCode) {
-            $exitCode = 0
+    if ($TimeoutSeconds -eq 0 -or ($TestMode -and $env:KEYPROXY_TEST_DIRECT_CODEX -eq '1')) {
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $output = @(& $script:CodexExecutable @Arguments 2>&1 | ForEach-Object { $_.ToString() })
+            $exitCode = $LASTEXITCODE
+            if ($null -eq $exitCode) { $exitCode = 0 }
+            return [PSCustomObject]@{
+                ExitCode = [int]$exitCode
+                TimedOut = $false
+                Output = [string[]]$output
+                Text = [string]::Join([Environment]::NewLine, [string[]]$output)
+            }
         }
+        finally {
+            $ErrorActionPreference = $previousPreference
+        }
+    }
+
+    $outputFile = Join-Path $script:TemporaryRoot ('codex-output.{0}.log' -f [Guid]::NewGuid().ToString('N'))
+    $encodedArguments = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes(($Arguments | ConvertTo-Json -Compress)))
+    $runner = @'
+$ErrorActionPreference = 'Continue'
+$arguments = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($env:KEYPROXY_CODEX_ARGUMENTS)) | ConvertFrom-Json
+& $env:KEYPROXY_CODEX_EXECUTABLE @([string[]]$arguments) 2>&1 | ForEach-Object { $_.ToString() }
+exit $LASTEXITCODE
+'@
+    $runnerFile = Join-Path $script:TemporaryRoot ('codex-runner.{0}.ps1' -f [Guid]::NewGuid().ToString('N'))
+    [IO.File]::WriteAllText($runnerFile, $runner, $script:Utf8NoBom)
+    $previousExecutable = $env:KEYPROXY_CODEX_EXECUTABLE
+    $previousArguments = $env:KEYPROXY_CODEX_ARGUMENTS
+    try {
+        $env:KEYPROXY_CODEX_EXECUTABLE = $script:CodexExecutable
+        $env:KEYPROXY_CODEX_ARGUMENTS = $encodedArguments
+        $engine = (Get-Process -Id $PID).Path
+        $quotedRunnerFile = '"{0}"' -f $runnerFile
+        $process = Start-Process -FilePath $engine -ArgumentList @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', $quotedRunnerFile) -RedirectStandardOutput $outputFile -Wait:$false -PassThru
+        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            # O runner e o Codex abaixo dele foram iniciados por esta chamada; encerre só essa árvore.
+            $taskkill = Join-Path $env:SystemRoot 'System32\taskkill.exe'
+            if (Test-Path -LiteralPath $taskkill -PathType Leaf) {
+                & $taskkill /PID $process.Id /T /F 2>$null | Out-Null
+            }
+            if (-not $process.HasExited) {
+                Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                [void]$process.WaitForExit(5000)
+            }
+            return [PSCustomObject]@{ ExitCode = 124; TimedOut = $true; Output = @(); Text = '' }
+        }
+        $text = if (Test-Path -LiteralPath $outputFile) { [IO.File]::ReadAllText($outputFile) } else { '' }
+        $lines = @($text -split "`r?`n" | Where-Object { $_ -ne '' })
         return [PSCustomObject]@{
-            ExitCode = [int]$exitCode
-            Output = [string[]]$output
-            Text = [string]::Join([Environment]::NewLine, [string[]]$output)
+            ExitCode = [int]$process.ExitCode
+            TimedOut = $false
+            Output = [string[]]$lines
+            Text = $text
         }
     }
     finally {
-        $ErrorActionPreference = $previousPreference
+        if ($null -eq $previousExecutable) { Remove-Item Env:KEYPROXY_CODEX_EXECUTABLE -ErrorAction SilentlyContinue } else { $env:KEYPROXY_CODEX_EXECUTABLE = $previousExecutable }
+        if ($null -eq $previousArguments) { Remove-Item Env:KEYPROXY_CODEX_ARGUMENTS -ErrorAction SilentlyContinue } else { $env:KEYPROXY_CODEX_ARGUMENTS = $previousArguments }
+        Remove-Item -LiteralPath $runnerFile,$outputFile -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -399,6 +452,87 @@ function Test-ReparsePoint {
     }
     $item = Get-Item -LiteralPath $Path -Force
     return ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0
+}
+
+function Assert-NoReparsePointInPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $current = [IO.Path]::GetFullPath($Path)
+    while ($true) {
+        if (Test-ReparsePoint -Path $current) {
+            Stop-KeyProxyInstall ("{0} contém link ou reparse point: {1}. Use configuração manual para não alterar outro destino." -f $Label, $current)
+        }
+        $parent = Split-Path -Parent $current
+        if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq $current) {
+            return
+        }
+        $current = $parent
+    }
+}
+
+function Test-KeyProxyConfig {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    $content = [IO.File]::ReadAllText($Path)
+    return $content -match '(?m)^model = "gpt-5\.6-sol"\r?$' -and
+        $content -match '(?m)^model_provider = "keyproxy"\r?$' -and
+        $content -match '(?m)^\[model_providers\.keyproxy\]\r?$' -and
+        $content -match '(?m)^\[mcp_servers\.keyproxy\]\r?$'
+}
+
+function Assert-ValidRecoveryState {
+    if (-not (Test-Path -LiteralPath $script:StateFile)) {
+        if (Test-KeyProxyConfig -Path $script:ConfigFile) {
+            Stop-KeyProxyInstall 'A configuração KeyProxy ativa não tem manifesto de recuperação confiável; nenhum arquivo será sobrescrito.'
+        }
+        return
+    }
+    Assert-NoReparsePointInPath -Path $script:StateFile -Label 'manifesto de recuperação KeyProxy'
+    if (-not (Test-Path -LiteralPath $script:StateFile -PathType Leaf)) {
+        Stop-KeyProxyInstall 'O manifesto de recuperação não é um arquivo regular.'
+    }
+    try {
+        $state = Get-Content -LiteralPath $script:StateFile -Raw | ConvertFrom-Json
+    }
+    catch {
+        Stop-KeyProxyInstall 'O manifesto de recuperação não contém JSON válido.'
+    }
+    if ($state.version -ne 1 -or $state.createdBy -ne 'keyproxy-codex-install' -or
+        $state.configPath -ne $script:ConfigFile -or $state.configExisted -isnot [bool]) {
+        Stop-KeyProxyInstall 'O manifesto de recuperação é inválido para este CODEX_HOME; nenhum arquivo será sobrescrito.'
+    }
+    if ($state.configExisted) {
+        $backupPath = if ([string]::IsNullOrWhiteSpace([string]$state.configBackup)) { '' } else { [IO.Path]::GetFullPath([string]$state.configBackup) }
+        $configPath = [IO.Path]::GetFullPath($script:ConfigFile)
+        if ([string]::IsNullOrWhiteSpace($backupPath) -or
+            -not $backupPath.StartsWith($configPath + '.', [StringComparison]::Ordinal) -or
+            -not $backupPath.EndsWith('.bak', [StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-Path -LiteralPath $backupPath -PathType Leaf) -or
+            (Test-ReparsePoint -Path $backupPath)) {
+            Stop-KeyProxyInstall 'O backup registrado pelo KeyProxy não está disponível ou não é seguro; nenhum arquivo será sobrescrito.'
+        }
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($state.configBackup)) {
+        Stop-KeyProxyInstall 'O manifesto de recuperação contém backup inesperado; nenhum arquivo será sobrescrito.'
+    }
+}
+
+function Write-RecoveryState {
+    if (Test-Path -LiteralPath $script:StateFile) { return }
+    $state = [ordered]@{
+        version = 1
+        configPath = $script:ConfigFile
+        configExisted = [bool]$script:ConfigExisted
+        configBackup = [string]$script:BackupFile
+        createdBy = 'keyproxy-codex-install'
+    }
+    $staging = Join-Path $script:ConfigHome ('.keyproxy-codex-state.{0}' -f $PID)
+    [IO.File]::WriteAllText($staging, ($state | ConvertTo-Json -Compress), $script:Utf8NoBom)
+    Move-Item -LiteralPath $staging -Destination $script:StateFile
+    $script:StateCreated = $true
 }
 
 function Get-UserApiKey {
@@ -586,11 +720,8 @@ function Test-UnclosedTomlCollection {
 }
 
 function Assert-SupportedExistingConfig {
-    if (Test-Path -LiteralPath $script:ConfigHome -PathType Container) {
-        if (Test-ReparsePoint -Path $script:ConfigHome) {
-            Stop-KeyProxyInstall 'O diretório CODEX_HOME é um reparse point; use configuração manual para preservar esse layout.'
-        }
-    }
+    Assert-NoReparsePointInPath -Path $script:ConfigHome -Label 'CODEX_HOME'
+    Assert-NoReparsePointInPath -Path $script:ConfigFile -Label 'config.toml'
     if (-not (Test-Path -LiteralPath $script:ConfigFile -PathType Leaf)) {
         return
     }
@@ -899,12 +1030,20 @@ function Validate-Api {
         return
     }
 
-    Write-KeyProxyInfo ("Executando uma chamada real com {0}." -f $script:KeyProxyModel)
-    Write-KeyProxyInfo 'Se a rede ficar presa, pressione Ctrl+C; o script não encerra processos externos.'
+    $timeoutValue = if ([string]::IsNullOrWhiteSpace($env:KEYPROXY_CODEX_API_TIMEOUT_SECONDS)) { 90 } else { $env:KEYPROXY_CODEX_API_TIMEOUT_SECONDS }
+    $timeoutSeconds = 0
+    if (-not [int]::TryParse($timeoutValue, [ref]$timeoutSeconds) -or $timeoutSeconds -lt 1 -or $timeoutSeconds -gt 3600) {
+        Stop-KeyProxyInstall 'KEYPROXY_CODEX_API_TIMEOUT_SECONDS precisa ser um inteiro entre 1 e 3600.'
+    }
+    Write-KeyProxyInfo ("Executando uma chamada real com {0} (prazo: {1}s)." -f $script:KeyProxyModel, $timeoutSeconds)
     $result = Invoke-Codex -Arguments @(
         'exec', '--sandbox', 'read-only', '--skip-git-repo-check',
         'Responda somente com: KEYPROXY_OK'
-    )
+    ) -TimeoutSeconds $timeoutSeconds
+    if ($result.TimedOut) {
+        Write-KeyProxyWarning ("A chamada real excedeu o prazo de {0}s; o login OAuth oficial foi preservado." -f $timeoutSeconds)
+        Stop-KeyProxyInstall 'Prazo excedido na chamada real do KeyProxy Hub.' 2
+    }
     if ($result.ExitCode -ne 0) {
         Write-KeyProxyWarning ("A configuração local passou, mas a chamada real falhou (código {0})." -f $result.ExitCode)
         Write-KeyProxyWarning 'Confira sua chave, rede, cota e o endpoint do KeyProxy Hub.'
@@ -962,6 +1101,10 @@ function Restore-LocalChanges {
             Write-KeyProxyWarning ("Rollback da variável KEYPROXY_API_KEY falhou: {0}" -f $_.Exception.Message)
         }
     }
+
+    if ($script:StateCreated -and -not [string]::IsNullOrWhiteSpace($script:StateFile)) {
+        Remove-Item -LiteralPath $script:StateFile -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Invoke-KeyProxyMain {
@@ -980,6 +1123,11 @@ function Invoke-KeyProxyMain {
     }
     $script:ConfigHome = [IO.Path]::GetFullPath($configuredHome)
     $script:ConfigFile = Join-Path $script:ConfigHome 'config.toml'
+    $script:StateFile = Join-Path $script:ConfigHome 'keyproxy-codex-state.json'
+    Assert-NoReparsePointInPath -Path $script:ConfigHome -Label 'CODEX_HOME'
+    Assert-NoReparsePointInPath -Path $script:ConfigFile -Label 'config.toml'
+    Assert-NoReparsePointInPath -Path $script:StateFile -Label 'manifesto de recuperação KeyProxy'
+    Assert-ValidRecoveryState
 
     Show-KeyProxyBanner
     Write-KeyProxyInfo 'Sistema detectado: Windows nativo'
@@ -998,6 +1146,7 @@ function Invoke-KeyProxyMain {
     Write-KeyProxyStep -Number 4 -Message 'configurando modelo, API e MCP'
     Install-MergedConfig
     Validate-LocalConfiguration
+    Write-RecoveryState
     $script:RollbackArmed = $false
 
     Write-KeyProxyStep -Number 5 -Message 'testando a conexão com o KeyProxy Hub'

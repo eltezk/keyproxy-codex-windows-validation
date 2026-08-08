@@ -32,7 +32,7 @@ case "$1" in
   doctor) printf '%s\n' '{"checks":{"config.load":{"details":{"model":"gpt-5.6-sol","model provider":"keyproxy"}}}}' ;;
   mcp) printf '%s\n' 'keyproxy' ;;
   logout) printf '%s\n' 'logout' >> "${TEST_EVENT_LOG:?}" ;;
-  exec) printf '%s\n' 'exec' >> "${TEST_EVENT_LOG:?}"; if [ "${TEST_EXEC_MODE:-}" = 'api-fail' ]; then printf '%s\n' 'model: gpt-5.6-sol' 'provider: keyproxy' 'ERROR HTTP 403'; exit 53; fi; printf '%s\n' 'model: gpt-5.6-sol' 'provider: keyproxy' 'KEYPROXY_OK' ;;
+  exec) printf '%s\n' 'exec' >> "${TEST_EVENT_LOG:?}"; if [ "${TEST_EXEC_MODE:-}" = 'api-fail' ]; then printf '%s\n' 'model: gpt-5.6-sol' 'provider: keyproxy' 'ERROR HTTP 403'; exit 53; fi; if [ "${TEST_EXEC_MODE:-}" = 'timeout' ]; then sleep 3; fi; printf '%s\n' 'model: gpt-5.6-sol' 'provider: keyproxy' 'KEYPROXY_OK' ;;
   *) exit 90 ;;
 esac
 CODEX
@@ -66,7 +66,7 @@ case "$1" in
   doctor) printf '%s\n' '{"checks":{"config.load":{"details":{"model":"gpt-5.6-sol","model provider":"keyproxy"}}}}' ;;
   mcp) printf '%s\n' 'keyproxy' ;;
   logout) printf '%s\n' 'logout' >> "${TEST_EVENT_LOG:?}" ;;
-  exec) printf '%s\n' 'exec' >> "${TEST_EVENT_LOG:?}"; if [ "${TEST_EXEC_MODE:-}" = 'api-fail' ]; then printf '%s\n' 'model: gpt-5.6-sol' 'provider: keyproxy' 'ERROR HTTP 403'; exit 53; fi; printf '%s\n' 'model: gpt-5.6-sol' 'provider: keyproxy' 'KEYPROXY_OK' ;;
+  exec) printf '%s\n' 'exec' >> "${TEST_EVENT_LOG:?}"; if [ "${TEST_EXEC_MODE:-}" = 'api-fail' ]; then printf '%s\n' 'model: gpt-5.6-sol' 'provider: keyproxy' 'ERROR HTTP 403'; exit 53; fi; if [ "${TEST_EXEC_MODE:-}" = 'timeout' ]; then sleep 3; fi; printf '%s\n' 'model: gpt-5.6-sol' 'provider: keyproxy' 'KEYPROXY_OK' ;;
   *) exit 90 ;;
 esac
 CODEX
@@ -105,6 +105,7 @@ run_case() {
     TEST_DOWNLOAD_LOG="$CASE_ROOT/download.log" \
     TEST_INSTALL_LOG="$CASE_ROOT/install.log" \
     TEST_EXEC_MODE="$exec_mode" \
+    KEYPROXY_CODEX_API_TIMEOUT_SECONDS="${TEST_API_TIMEOUT_SECONDS:-90}" \
     /bin/bash "$INSTALLER" "${options[@]}" \
     > "$CASE_ROOT/stdout.log" 2> "$CASE_ROOT/stderr.log"
 }
@@ -120,6 +121,8 @@ assert_file_contains "$CASE_ROOT/codex.log" '--version' 'codex --version não fo
 assert_file_contains "$CASE_HOME/.codex/config.toml" 'model = "gpt-5.6-sol"' 'modelo KeyProxy ausente'
 assert_file_contains "$CASE_HOME/.codex/config.toml" 'model_provider = "keyproxy"' 'provider KeyProxy ausente'
 assert_file_contains "$CASE_HOME/.codex/config.toml" '[mcp_servers.keyproxy]' 'MCP KeyProxy ausente'
+assert_file_contains "$CASE_HOME/.codex/keyproxy-codex-state" 'version=1' 'versão do manifesto KeyProxy ausente'
+assert_file_contains "$CASE_HOME/.codex/keyproxy-codex-state" 'created_by=keyproxy-codex-install' 'manifesto KeyProxy ausente'
 if [[ -s "$CASE_ROOT/events.log" ]]; then
   printf 'FALHA: logout ocorreu apesar de o teste de API ter sido ignorado\n' >&2
   exit 1
@@ -154,6 +157,20 @@ if [[ "$(paste -sd ',' "$CASE_ROOT/events.log")" != 'exec' ]]; then
 fi
 assert_file_contains "$CASE_ROOT/stderr.log" 'chamada real falhou' 'falha de API não foi diagnosticada'
 printf 'unix-api-failure-preserves-oauth=ok\n'
+
+# Timeout de API não remove OAuth e retorna código 2.
+new_case api-timeout
+write_valid_codex "$CASE_BIN/codex"
+if TEST_API_TIMEOUT_SECONDS=1 run_case "$SHELL_PATH" live timeout; then
+  printf 'FALHA: timeout de API foi aceito\n' >&2
+  exit 1
+fi
+if [[ "$(paste -sd ',' "$CASE_ROOT/events.log")" != 'exec' ]]; then
+  printf 'FALHA: logout ocorreu após timeout da API\n' >&2
+  exit 1
+fi
+assert_file_contains "$CASE_ROOT/stderr.log" 'excedeu o prazo' 'timeout não foi diagnosticado'
+printf 'unix-api-timeout-preserves-oauth=ok\n'
 
 # Codex válido: não baixa nem reinstala.
 new_case existing

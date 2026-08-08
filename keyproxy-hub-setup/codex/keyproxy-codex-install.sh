@@ -18,6 +18,9 @@ TMP_ROOT=""
 BACKUP_FILE=""
 PROFILE_BACKUP=""
 ENV_BACKUP=""
+STATE_FILE=""
+STATE_CREATED=false
+API_TEST_PID=""
 ROLLBACK_ARMED=false
 CONFIG_EXISTED=false
 CONFIG_INSTALLED=false
@@ -58,11 +61,12 @@ O instalador:
   2. solicita a API key sem exibi-la;
   3. salva a chave em ~/.config/keyproxy/env com permissão 600;
   4. mescla o provider e o MCP no config.toml ativo, preservando o restante;
-  5. cria backups e valida o TOML;
-  6. testa modelo, provider, MCP e uma resposta real;
+  5. cria backups e um manifesto local de recuperação do KeyProxy;
+  6. valida modelo, provider, MCP e uma resposta real com prazo limitado;
   7. remove o login OAuth oficial somente após a validação de conexão.
 
-Com --skip-api-test, o login OAuth oficial é preservado.
+Com --skip-api-test, o login OAuth oficial é preservado. Falhas de API, MCP
+ou prazo também preservam o login OAuth oficial.
 
 Configuração ativa:
   $CODEX_HOME/config.toml, quando CODEX_HOME estiver definido;
@@ -75,9 +79,11 @@ Rollback do TOML:
   cp "/caminho/config.toml.DATA.bak" "${CODEX_HOME:-$HOME/.codex}/config.toml"
 
 Desinstalação manual:
-  1. restaure o backup do config.toml ou remova as seções KeyProxy;
-  2. remova do perfil o bloco entre os marcadores "KeyProxy Hub para Codex CLI";
-  3. remova ~/.config/keyproxy/env quando não precisar mais da credencial.
+  1. confira o manifesto restrito em
+     ${CODEX_HOME:-$HOME/.codex}/keyproxy-codex-state;
+  2. restaure manualmente apenas o backup indicado no campo config_backup;
+  3. remova do perfil o bloco entre os marcadores "KeyProxy Hub para Codex CLI";
+  4. remova ~/.config/keyproxy/env quando não precisar mais da credencial.
 
 O script não usa OPENAI_BASE_URL, OPENAI_API_BASE ou chave literal no TOML.
 HELP
@@ -120,11 +126,20 @@ rollback_local_changes() {
       rm -f "$ENV_FILE" || true
     fi
   fi
+
+  if [[ "$STATE_CREATED" == true && -n "$STATE_FILE" ]]; then
+    rm -f "$STATE_FILE" || true
+  fi
 }
 
 cleanup() {
   local exit_code=$?
   trap - EXIT
+
+  if [[ -n "$API_TEST_PID" ]]; then
+    kill "$API_TEST_PID" >/dev/null 2>&1 || true
+    wait "$API_TEST_PID" >/dev/null 2>&1 || true
+  fi
 
   if [[ "$ROLLBACK_ARMED" == true && "$exit_code" -ne 0 ]]; then
     rollback_local_changes
@@ -154,6 +169,61 @@ assert_path_has_no_symlink() {
     [[ "$parent" != "$path" ]] || return
     path="$parent"
   done
+}
+
+is_keyproxy_config() {
+  local file="$1"
+  [[ -f "$file" ]] \
+    && grep -Eq '^model[[:space:]]*=[[:space:]]*"gpt-5\.6-sol"[[:space:]]*$' "$file" \
+    && grep -Eq '^model_provider[[:space:]]*=[[:space:]]*"keyproxy"[[:space:]]*$' "$file" \
+    && grep -Fqx '[model_providers.keyproxy]' "$file" \
+    && grep -Fqx '[mcp_servers.keyproxy]' "$file"
+}
+
+validate_recovery_state() {
+  local recorded_version recorded_creator recorded_path recorded_existed recorded_backup
+  if [[ ! -e "$STATE_FILE" ]]; then
+    if is_keyproxy_config "$CONFIG_FILE"; then
+      die 'A configuração KeyProxy ativa não tem manifesto de recuperação confiável; nenhum arquivo será sobrescrito.'
+    fi
+    return
+  fi
+  [[ ! -L "$STATE_FILE" ]] || die 'O manifesto de recuperação contém link simbólico; nenhum arquivo será seguido.'
+  [[ -f "$STATE_FILE" ]] || die 'O manifesto de recuperação não é um arquivo regular.'
+
+  recorded_version="$(grep -E '^version=' "$STATE_FILE" | cut -d= -f2-)"
+  recorded_creator="$(grep -E '^created_by=' "$STATE_FILE" | cut -d= -f2-)"
+  recorded_path="$(grep -E '^config_path=' "$STATE_FILE" | cut -d= -f2-)"
+  recorded_existed="$(grep -E '^config_existed=' "$STATE_FILE" | cut -d= -f2-)"
+  recorded_backup="$(grep -E '^config_backup=' "$STATE_FILE" | cut -d= -f2-)"
+  [[ "$recorded_version" == 1 && "$recorded_creator" == keyproxy-codex-install \
+    && "$recorded_path" == "$CONFIG_FILE" && ( "$recorded_existed" == true || "$recorded_existed" == false ) ]] || die \
+    'O manifesto de recuperação é inválido para este CODEX_HOME; nenhum arquivo será sobrescrito.'
+  if [[ "$recorded_existed" == true ]]; then
+    [[ "$recorded_backup" == "$CONFIG_FILE".*.bak && -f "$recorded_backup" && ! -L "$recorded_backup" ]] || die \
+      'O backup registrado pelo KeyProxy não está disponível ou não é seguro; nenhum arquivo será sobrescrito.'
+  else
+    [[ -z "$recorded_backup" ]] || die 'O manifesto de recuperação contém backup inesperado; nenhum arquivo será sobrescrito.'
+  fi
+}
+
+write_recovery_state() {
+  local state_dir staged
+  [[ ! -e "$STATE_FILE" ]] || return
+  state_dir="$(dirname "$STATE_FILE")"
+  mkdir -p "$state_dir"
+  chmod 700 "$state_dir"
+  staged="$state_dir/.codex-state.$$"
+  {
+    printf 'version=1\n'
+    printf 'config_path=%s\n' "$CONFIG_FILE"
+    printf 'config_existed=%s\n' "$CONFIG_EXISTED"
+    printf 'config_backup=%s\n' "$BACKUP_FILE"
+    printf 'created_by=keyproxy-codex-install\n'
+  } > "$staged"
+  chmod 600 "$staged"
+  mv "$staged" "$STATE_FILE"
+  STATE_CREATED=true
 }
 
 is_allowed_installer_url() {
@@ -616,8 +686,27 @@ validate_api() {
   info "Se a rede ficar presa, pressione Ctrl+C; o script não encerra processos externos."
   local output="$TMP_ROOT/api-test.log"
   local api_status=0
+  local timeout_seconds="${KEYPROXY_CODEX_API_TIMEOUT_SECONDS:-90}"
+  [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || die \
+    'KEYPROXY_CODEX_API_TIMEOUT_SECONDS precisa ser um inteiro positivo.'
+
   codex exec --sandbox read-only --skip-git-repo-check \
-    'Responda somente com: KEYPROXY_OK' > "$output" 2>&1 || api_status=$?
+    'Responda somente com: KEYPROXY_OK' > "$output" 2>&1 &
+  API_TEST_PID=$!
+  local elapsed=0
+  while kill -0 "$API_TEST_PID" >/dev/null 2>&1; do
+    if ((elapsed >= timeout_seconds)); then
+      kill "$API_TEST_PID" >/dev/null 2>&1 || true
+      wait "$API_TEST_PID" >/dev/null 2>&1 || true
+      API_TEST_PID=""
+      warn "A chamada real excedeu o prazo de ${timeout_seconds}s; o login OAuth oficial foi preservado."
+      exit 2
+    fi
+    sleep 1
+    ((elapsed+=1))
+  done
+  wait "$API_TEST_PID" || api_status=$?
+  API_TEST_PID=""
   if ((api_status != 0)); then
     warn "A configuração local passou, mas a chamada real falhou (código $api_status)."
     warn "Confira sua chave, rede, cota e o endpoint do KeyProxy Hub."
@@ -652,7 +741,7 @@ main() {
   [[ "$(id -u)" != "0" ]] || die \
     "Não execute como root/sudo; o instalador configura o usuário atual."
 
-  for command_name in uname id awk grep sed date mktemp cp mv rm chmod mkdir dirname cat; do
+  for command_name in uname id awk grep sed date mktemp cp mv rm chmod mkdir dirname cat cut; do
     require_command "$command_name"
   done
 
@@ -664,11 +753,14 @@ main() {
   CONFIG_FILE="$CODEX_CONFIG_HOME/config.toml"
   KEYPROXY_DIR="$HOME/.config/keyproxy"
   ENV_FILE="$KEYPROXY_DIR/env"
+  STATE_FILE="$CODEX_CONFIG_HOME/keyproxy-codex-state"
   assert_path_has_no_symlink "$CODEX_CONFIG_HOME" 'CODEX_HOME'
   assert_path_has_no_symlink "$CONFIG_FILE" 'config.toml'
   assert_path_has_no_symlink "$SHELL_PROFILE" 'perfil do shell'
   assert_path_has_no_symlink "$KEYPROXY_DIR" 'diretório de credencial KeyProxy'
   assert_path_has_no_symlink "$ENV_FILE" 'arquivo de credencial KeyProxy'
+  assert_path_has_no_symlink "$STATE_FILE" 'manifesto de recuperação KeyProxy'
+  validate_recovery_state
 
   show_banner
   info "Sistema detectado: $PLATFORM"
@@ -690,6 +782,7 @@ main() {
   merge_config
   update_shell_profile
   validate_local_configuration
+  write_recovery_state
   ROLLBACK_ARMED=false
 
   step 5 "testando a conexão com o KeyProxy Hub"

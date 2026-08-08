@@ -75,6 +75,9 @@ if "%~1"=="exec" (
     echo KEYPROXY_OK
     exit /b 0
   )
+  if /I "%TEST_EXEC_MODE%"=="timeout" (
+    timeout /t 3 /nobreak >nul
+  )
   echo model: gpt-5.6-sol
   echo provider: keyproxy
   echo KEYPROXY_OK
@@ -118,13 +121,14 @@ function Invoke-InstallerTest {
         [string]$DoctorFail = '',
         [string]$McpFail = '',
         [string]$ExecMode = '',
+        [string]$ApiTimeoutSeconds = '',
         [string]$InstallerPayload = '',
         [switch]$TestNotification
     )
 
     $saved = @{}
-    foreach ($name in @('CODEX_HOME', 'KEYPROXY_INSTALLER_TEST_MODE', 'TEST_CODEX_LOG',
-            'TEST_EVENT_LOG', 'TEST_DOCTOR_FAIL', 'TEST_MCP_FAIL', 'TEST_EXEC_MODE')) {
+    foreach ($name in @('CODEX_HOME', 'KEYPROXY_INSTALLER_TEST_MODE', 'KEYPROXY_TEST_DIRECT_CODEX', 'TEST_CODEX_LOG',
+            'TEST_EVENT_LOG', 'TEST_DOCTOR_FAIL', 'TEST_MCP_FAIL', 'TEST_EXEC_MODE', 'KEYPROXY_CODEX_API_TIMEOUT_SECONDS')) {
         $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
     }
     try {
@@ -135,6 +139,13 @@ function Invoke-InstallerTest {
         $env:TEST_DOCTOR_FAIL = $DoctorFail
         $env:TEST_MCP_FAIL = $McpFail
         $env:TEST_EXEC_MODE = $ExecMode
+        $env:KEYPROXY_CODEX_API_TIMEOUT_SECONDS = $ApiTimeoutSeconds
+        if ($ExecMode -eq 'timeout') {
+            Remove-Item Env:KEYPROXY_TEST_DIRECT_CODEX -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:KEYPROXY_TEST_DIRECT_CODEX = '1'
+        }
 
         $engine = (Get-Process -Id $PID).Path
         $arguments = @(
@@ -241,6 +252,10 @@ url = "https://antigo.invalid/mcp"
     $rc = Invoke-InstallerTest -Case $case -ApiKey $testSecret
     Assert-Equal $rc 0 'instalação nova/API simulada falhou'
     Assert-True (Test-Path -LiteralPath $case.Config) 'config novo ausente'
+    $statePath = Join-Path $case.CodexHome 'keyproxy-codex-state.json'
+    Assert-True (Test-Path -LiteralPath $statePath -PathType Leaf) 'manifesto KeyProxy ausente'
+    $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    Assert-True ($state.version -eq 1 -and $state.createdBy -eq 'keyproxy-codex-install' -and $state.configPath -eq $case.Config -and -not $state.configExisted) 'manifesto KeyProxy inválido'
     $successEvents = @([IO.File]::ReadAllText($case.EventLog) -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     Assert-Equal ([string]::Join(',', $successEvents)) 'exec,logout' 'logout não ocorreu após a chamada real'
     [Console]::Out.WriteLine('native-api-before-logout=ok')
@@ -254,6 +269,16 @@ url = "https://antigo.invalid/mcp"
     Assert-Equal ([string]::Join(',', $apiFailureEvents)) 'exec' 'logout ocorreu após falha da API'
     Assert-True (Test-Path -LiteralPath $case.Config) 'falha API removeu config local válida'
     [Console]::Out.WriteLine('native-api-failure-preserves-oauth=ok')
+
+    # Timeout usa o subprocesso de produção mesmo no harness; OAuth permanece intacto.
+    $case = New-TestCase -Root $root -Name 'api-timeout'
+    $rc = Invoke-InstallerTest -Case $case -ApiKey $testSecret -ExecMode 'timeout' -ApiTimeoutSeconds '1'
+    Assert-Equal $rc 2 'timeout da API deveria retornar 2'
+    $timeoutEvents = @([IO.File]::ReadAllText($case.EventLog) -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    Assert-Equal ([string]::Join(',', $timeoutEvents)) 'exec' 'logout ocorreu após timeout da API'
+    $timeoutStderr = [IO.File]::ReadAllText($case.Stderr)
+    Assert-True ($timeoutStderr.Contains('excedeu o prazo')) 'timeout da API não foi diagnosticado'
+    [Console]::Out.WriteLine('native-api-timeout-preserves-oauth=ok')
 
     # Codex ausente: bootstrap oficial simulado deve ocorrer antes do KeyProxy.
     $case = New-TestCase -Root $root -Name 'bootstrap-missing'

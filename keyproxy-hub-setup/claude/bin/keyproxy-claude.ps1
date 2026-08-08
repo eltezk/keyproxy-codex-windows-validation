@@ -9,8 +9,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $SettingsPath = Join-Path $ConfigDir 'settings.json'
 $CachePath = Join-Path $ConfigDir 'cache\keyproxy-models.json'
-$Fallback = @('auto','gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna','gpt-5.5','gpt-5.4','gpt-5.4-mini','gpt-5.3-codex','gpt-5.3-codex-xhigh','gpt-5.3-codex-high','gpt-5.3-codex-low','gpt-5.3-codex-none','gpt-5.3-codex-spark')
-$Validated = @('gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna','gpt-5.5','gpt-5.4','gpt-5.4-mini','gpt-5.3-codex-spark')
+$Fallback = @('auto','gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna','gpt-5.5','gpt-5.4','gpt-5.4-mini','gpt-5.3-codex','gpt-5.3-codex-xhigh','gpt-5.3-codex-high','gpt-5.3-codex-low','gpt-5.3-codex-none')
+$Validated = @('gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna','gpt-5.5','gpt-5.4','gpt-5.4-mini')
 $settings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
 $baseUrl = [string]$settings.env.ANTHROPIC_BASE_URL
 $modelsUrl = if ($settings.env.PSObject.Properties['KEYPROXY_MODELS_URL']) { [string]$settings.env.KEYPROXY_MODELS_URL } else { 'https://painel.keyproxyhub.store/v1/models' }

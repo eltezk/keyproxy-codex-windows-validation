@@ -32,11 +32,12 @@ Comandos:
   validate             Valida a integridade e a sintaxe dos módulos do pacote
   revert-claude --yes  Restaura o snapshot anterior do Claude Code
   reset-claude --yes   Remove somente a configuração KeyProxy do Claude Code
-  codex-recovery       Mostra backups e instruções manuais seguras do Codex
+  revert-codex --yes   Restaura somente a configuração Codex registrada pelo KeyProxy
+  codex-recovery       Mostra backup e instruções manuais seguras do Codex
   help                 Exibe esta ajuda
 
-As operações de reversão exigem --yes fora do menu. O pacote não executa
-reversão automática do Codex: somente informa backups comprováveis.
+As operações de reversão exigem --yes fora do menu. A reversão Codex só usa
+um manifesto e backup criados pelo KeyProxy; credenciais e o Codex CLI são preservados.
 EOF
 }
 
@@ -78,6 +79,31 @@ run_codex_install() {
 
 codex_home() { printf '%s\n' "${CODEX_HOME:-$HOME/.codex}"; }
 
+is_keyproxy_codex_config() {
+  local config="$1"
+  [[ -f "$config" ]] \
+    && grep -Eq '^model[[:space:]]*=[[:space:]]*"gpt-5\.6-sol"[[:space:]]*$' "$config" \
+    && grep -Eq '^model_provider[[:space:]]*=[[:space:]]*"keyproxy"[[:space:]]*$' "$config" \
+    && grep -Fqx '[model_providers.keyproxy]' "$config" \
+    && grep -Fqx '[mcp_servers.keyproxy]' "$config"
+}
+
+is_keyproxy_codex_backup() {
+  local config="$1" backup="$2"
+  [[ "$backup" == "$config".*.bak && -f "$backup" && ! -L "$backup" ]]
+}
+
+read_codex_recovery_state() {
+  local state="$1" config="$2"
+  RECOVERY_VERSION="$(grep -E '^version=' "$state" | cut -d= -f2-)"
+  RECOVERY_CREATED_BY="$(grep -E '^created_by=' "$state" | cut -d= -f2-)"
+  RECOVERY_PATH="$(grep -E '^config_path=' "$state" | cut -d= -f2-)"
+  RECOVERY_EXISTED="$(grep -E '^config_existed=' "$state" | cut -d= -f2-)"
+  RECOVERY_BACKUP="$(grep -E '^config_backup=' "$state" | cut -d= -f2-)"
+  [[ "$RECOVERY_VERSION" == 1 && "$RECOVERY_CREATED_BY" == keyproxy-codex-install \
+    && "$RECOVERY_PATH" == "$config" && ( "$RECOVERY_EXISTED" == true || "$RECOVERY_EXISTED" == false ) ]]
+}
+
 show_codex_status() {
   local home config backup_count=0
   home="$(codex_home)"; config="$home/config.toml"
@@ -97,12 +123,10 @@ show_codex_status() {
   else
     printf 'KeyProxy Codex: inativo ou divergente\n'
   fi
-  if [[ -d "$home" ]]; then
-    while IFS= read -r backup; do
-      ((backup_count+=1))
-    done < <(find "$home" -maxdepth 1 -type f -name 'config.toml.*.bak' -print 2>/dev/null | LC_ALL=C sort)
+  if [[ -f "$home/keyproxy-codex-state" && ! -L "$home/keyproxy-codex-state" ]]; then
+    backup_count=1
   fi
-  printf 'Backups Codex: %s\n' "$backup_count"
+  printf 'Recuperação Codex: %s\n' "$(if ((backup_count == 1)); then printf 'manifesto KeyProxy presente'; else printf 'não disponível'; fi)"
   printf 'Credencial Codex: %s\n' "$(if [[ -f "$HOME/.config/keyproxy/env" ]]; then printf 'arquivo local presente e ocultado'; else printf 'não detectada'; fi)"
 }
 
@@ -139,25 +163,99 @@ validate_modules() {
   ok 'Validação local concluída'
 }
 
+validate_codex_shell_integration() {
+  local profile marker_status
+  for profile in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
+    [[ -e "$profile" ]] || continue
+    [[ ! -L "$profile" && -f "$profile" ]] || die \
+      "O perfil $profile não é um arquivo regular seguro; nenhum arquivo foi alterado."
+    marker_status="$(awk '
+      $0 == "# >>> KeyProxy Hub para Codex CLI >>>" { begin_count++; opened = 1 }
+      $0 == "# <<< KeyProxy Hub para Codex CLI <<<" { end_count++; if (!opened) invalid = 1; opened = 0 }
+      END { if (opened || invalid || begin_count != end_count || begin_count > 1) print "invalid" }
+    ' "$profile")"
+    [[ "$marker_status" != invalid ]] || die \
+      "O perfil $profile contém marcadores KeyProxy incompletos ou duplicados; nenhum arquivo foi alterado."
+  done
+}
+
+remove_codex_shell_integration() {
+  local profile staged
+  for profile in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
+    [[ -f "$profile" && ! -L "$profile" ]] || continue
+    grep -Fqx '# >>> KeyProxy Hub para Codex CLI >>>' "$profile" || continue
+    staged="$profile.keyproxy-remove.$$"
+    awk '
+      $0 == "# >>> KeyProxy Hub para Codex CLI >>>" { skipping = 1; next }
+      $0 == "# <<< KeyProxy Hub para Codex CLI <<<" { skipping = 0; next }
+      !skipping { print }
+    ' "$profile" > "$staged"
+    chmod 600 "$staged"
+    mv "$staged" "$profile"
+  done
+}
+
+revert_codex() {
+  local home config state backup staged env_file
+  home="$(codex_home)"; config="$home/config.toml"; state="$home/keyproxy-codex-state"
+  [[ ! -L "$home" && ! -L "$config" && ! -L "$state" && -f "$state" ]] || die \
+    'Não há manifesto KeyProxy seguro para este CODEX_HOME; nenhum arquivo foi alterado.'
+  read_codex_recovery_state "$state" "$config" || die \
+    'O manifesto KeyProxy é inválido para este CODEX_HOME; nenhum arquivo será alterado.'
+  is_keyproxy_codex_config "$config" || die \
+    'A configuração ativa do Codex não pertence ao KeyProxy; nenhum arquivo será sobrescrito.'
+  validate_codex_shell_integration
+
+  if [[ "$RECOVERY_EXISTED" == true ]]; then
+    is_keyproxy_codex_backup "$config" "$RECOVERY_BACKUP" || die \
+      'O backup registrado pelo KeyProxy não está disponível ou não é seguro; nenhum arquivo será sobrescrito.'
+    backup="$RECOVERY_BACKUP"
+    staged="$home/.config.toml.restore-keyproxy.$$"
+    cp -p "$backup" "$staged"
+    chmod 600 "$staged"
+    mv "$staged" "$config"
+    printf '[ok] Configuração Codex restaurada a partir do backup registrado pelo KeyProxy.
+'
+  else
+    [[ -z "$RECOVERY_BACKUP" ]] || die 'O manifesto de recuperação contém backup inesperado; nenhum arquivo será alterado.'
+    rm -f "$config"
+    printf '[ok] Configuração Codex criada pelo KeyProxy foi removida.
+'
+  fi
+
+  remove_codex_shell_integration
+  rm -f "$state"
+  env_file="$HOME/.config/keyproxy/env"
+  printf 'A integração KeyProxy do shell foi removida. O Codex CLI e a credencial foram preservados.
+'
+  printf 'Para remover a credencial manualmente, exclua: %s
+' "$env_file"
+}
+
 show_codex_recovery() {
-  local home config backup found=false
-  home="$(codex_home)"; config="$home/config.toml"
+  local home config state recorded_path recorded_existed backup
+  home="$(codex_home)"; config="$home/config.toml"; state="$home/keyproxy-codex-state"
   banner
   card 'Recuperação manual segura do Codex CLI'
   printf 'Configuração ativa esperada: %s\n' "$config"
-  if [[ -d "$home" && ! -L "$home" ]]; then
-    while IFS= read -r backup; do
-      found=true
-      printf 'Backup encontrado: %s\n' "$backup"
-    done < <(find "$home" -maxdepth 1 -type f -name 'config.toml.*.bak' -print 2>/dev/null | LC_ALL=C sort)
-  fi
-  if [[ "$found" == false ]]; then
-    warn 'Nenhum backup comprovável foi encontrado; não há reversão automática disponível.'
+  if [[ -L "$home" || -L "$state" || ! -f "$state" ]]; then
+    warn 'Não há manifesto KeyProxy seguro para este CODEX_HOME; nenhum arquivo será alterado.'
     return 0
   fi
-  printf '\nAntes de restaurar manualmente: feche apenas o terminal que executará o comando, confira o backup e mantenha uma cópia do config.toml atual.\n'
-  printf 'Exemplo (substitua <BACKUP> por um caminho listado acima):\n'
-  printf '  cp -- "<BACKUP>" "%s"\n' "$config"
+  if ! read_codex_recovery_state "$state" "$config"; then
+    warn 'O manifesto KeyProxy é inválido para este CODEX_HOME; nenhum arquivo será alterado.'
+    return 0
+  fi
+  if [[ "$RECOVERY_EXISTED" == false ]]; then
+    printf 'O KeyProxy criou o config.toml originalmente; não há backup anterior a restaurar.\n'
+  elif is_keyproxy_codex_backup "$config" "$RECOVERY_BACKUP"; then
+    printf 'Backup KeyProxy registrado: %s\n' "$RECOVERY_BACKUP"
+    printf '\nAntes de restaurar manualmente: confira o backup e mantenha uma cópia do config.toml atual.\n'
+    printf 'Comando revisável: cp -- "%s" "%s"\n' "$RECOVERY_BACKUP" "$config"
+  else
+    warn 'O backup registrado pelo KeyProxy não está disponível ou não é seguro; nenhum arquivo será alterado.'
+    return 0
+  fi
   printf 'Depois, se não precisar mais da credencial KeyProxy, remova manualmente: %s\n' "$HOME/.config/keyproxy/env"
   printf 'Nenhum arquivo foi alterado por esta opção.\n'
 }
@@ -181,8 +279,9 @@ menu() {
   5. Validar módulos do pacote
   6. Restaurar configuração anterior do Claude Code
   7. Voltar Claude Code ao provider oficial
-  8. Mostrar recuperação manual segura do Codex CLI
-  9. Sair
+  8. Restaurar ou remover com segurança a configuração KeyProxy do Codex CLI
+  9. Mostrar informações de recuperação do Codex CLI
+ 10. Sair
 EOF
     IFS= read -r -p 'Escolha uma opção: ' option
     case "$option" in
@@ -193,8 +292,9 @@ EOF
       5) validate_modules ;;
       6) if confirm 'Restaurar o snapshot anterior do Claude Code?'; then run_claude revert; else warn 'Operação cancelada.'; fi ;;
       7) if confirm 'Remover KeyProxy do Claude Code e voltar ao provider oficial?'; then run_claude reset; else warn 'Operação cancelada.'; fi ;;
-      8) show_codex_recovery ;;
-      9) return 0 ;;
+      8) if confirm 'Restaurar ou remover somente a configuração KeyProxy do Codex CLI?'; then revert_codex; else warn 'Operação cancelada.'; fi ;;
+      9) show_codex_recovery ;;
+      10) return 0 ;;
       *) warn 'Opção inválida.' ;;
     esac
     printf '\n'; [[ -t 0 ]] && read -r -p 'Pressione Enter para voltar ao menu...' || true
@@ -217,6 +317,9 @@ dispatch() {
     reset-claude)
       [[ "${1:-}" == '--yes' ]] || die 'reset-claude exige --yes fora do menu.'
       shift; run_claude reset "$@" ;;
+    revert-codex)
+      [[ "${1:-}" == '--yes' ]] || die 'revert-codex exige --yes fora do menu.'
+      shift; revert_codex ;;
     help|-h|--help) usage ;;
     *) die "Comando inválido: $command. Use help." ;;
   esac

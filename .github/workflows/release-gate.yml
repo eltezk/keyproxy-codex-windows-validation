@@ -35,6 +35,13 @@ jobs:
           bash -n keyproxy-codex-unix-selftest.sh
           bash -n scripts/build-public-bundle.sh
           shasum -a 256 -c keyproxy-codex-install.sh.sha256
+      - name: Enforce one Codex source across distributions
+        shell: bash
+        run: |
+          cmp keyproxy-codex-install.sh keyproxy-hub-setup/codex/keyproxy-codex-install.sh
+          cmp keyproxy-codex-install-windows.ps1 keyproxy-hub-setup/codex/keyproxy-codex-install-windows.ps1
+          cmp keyproxy-codex-unix-selftest.sh keyproxy-hub-setup/codex/keyproxy-codex-unix-selftest.sh
+          cmp keyproxy-codex-windows-native-selftest.ps1 keyproxy-hub-setup/codex/keyproxy-codex-windows-native-selftest.ps1
       - name: Execute isolated Unix self-test
         shell: bash
         env:
@@ -106,6 +113,9 @@ jobs:
           $env:NO_COLOR = '1'
           & .\keyproxy-hub-setup\tests\windows-selftest.ps1
           & .\keyproxy-hub-setup\claude\tests\windows-selftest.ps1
+          & .\keyproxy-hub-setup\codex\keyproxy-codex-windows-native-selftest.ps1 `
+            -InstallerPath .\keyproxy-hub-setup\codex\keyproxy-codex-install-windows.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate unified setup package
         shell: pwsh
         run: |
@@ -137,6 +147,9 @@ jobs:
           $env:NO_COLOR = '1'
           & .\keyproxy-hub-setup\tests\windows-selftest.ps1
           & .\keyproxy-hub-setup\claude\tests\windows-selftest.ps1
+          & .\keyproxy-hub-setup\codex\keyproxy-codex-windows-native-selftest.ps1 `
+            -InstallerPath .\keyproxy-hub-setup\codex\keyproxy-codex-install-windows.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate unified setup package
         shell: powershell
         run: |

@@ -28,7 +28,6 @@ MODELS = [
     "gpt-5.3-codex-high",
     "gpt-5.3-codex-low",
     "gpt-5.3-codex-none",
-    "gpt-5.3-codex-spark",
 ]
 ENV_VALUES = {
     "ANTHROPIC_BASE_URL": BASE_URL,
