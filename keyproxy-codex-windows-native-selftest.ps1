@@ -229,6 +229,9 @@ url = "https://antigo.invalid/mcp"
     Write-Utf8NoBom -Path $case.Config -Content $existing
     $first = Invoke-InstallerTest -Case $case -ApiKey $testSecret -SkipApi -TestNotification
     Assert-Equal $first 0 'primeira instalação existente falhou'
+    $existingStatePath = Join-Path $case.CodexHome 'keyproxy-codex-state.json'
+    $existingState = [IO.File]::ReadAllText($existingStatePath, [Text.Encoding]::UTF8) | ConvertFrom-Json
+    Assert-Equal $existingState.configPath $case.Config 'manifesto não preservou caminho Unicode'
     $firstErrors = [IO.File]::ReadAllText($case.Stderr)
     Assert-True (-not $firstErrors.Contains('notificação ao Windows falhou')) 'WM_SETTINGCHANGE/user32 falhou'
     $second = Invoke-InstallerTest -Case $case -ApiKey $testSecret -SkipApi
@@ -260,7 +263,7 @@ url = "https://antigo.invalid/mcp"
     Assert-True (Test-Path -LiteralPath $case.Config) 'config novo ausente'
     $statePath = Join-Path $case.CodexHome 'keyproxy-codex-state.json'
     Assert-True (Test-Path -LiteralPath $statePath -PathType Leaf) 'manifesto KeyProxy ausente'
-    $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    $state = [IO.File]::ReadAllText($statePath, [Text.Encoding]::UTF8) | ConvertFrom-Json
     Assert-True ($state.version -eq 1 -and $state.createdBy -eq 'keyproxy-codex-install' -and $state.configPath -eq $case.Config -and -not $state.configExisted) 'manifesto KeyProxy inválido'
     $successEvents = @([IO.File]::ReadAllText($case.EventLog) -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     Assert-Equal ([string]::Join(',', $successEvents)) 'exec,logout' 'logout não ocorreu após a chamada real'

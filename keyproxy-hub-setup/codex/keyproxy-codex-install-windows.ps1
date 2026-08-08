@@ -259,9 +259,12 @@ function Invoke-Codex {
         $previousPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = 'Continue'
-            $output = @(& $script:CodexExecutable @Arguments 2>&1 | ForEach-Object { $_.ToString() })
+            # Não use um pipeline após o executável nativo: no Windows PowerShell 5.1
+            # ele pode substituir $LASTEXITCODE pelo status do cmdlet seguinte.
+            $nativeOutput = @(& $script:CodexExecutable @Arguments 2>&1)
             $exitCode = $LASTEXITCODE
             if ($null -eq $exitCode) { $exitCode = 0 }
+            $output = @($nativeOutput | ForEach-Object { $_.ToString() })
             return [PSCustomObject]@{
                 ExitCode = [int]$exitCode
                 TimedOut = $false
@@ -279,8 +282,10 @@ function Invoke-Codex {
     $runner = @'
 $ErrorActionPreference = 'Continue'
 $arguments = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($env:KEYPROXY_CODEX_ARGUMENTS)) | ConvertFrom-Json
-& $env:KEYPROXY_CODEX_EXECUTABLE @([string[]]$arguments) 2>&1 | ForEach-Object { $_.ToString() }
-exit $LASTEXITCODE
+$output = @(& $env:KEYPROXY_CODEX_EXECUTABLE @([string[]]$arguments) 2>&1)
+$exitCode = $LASTEXITCODE
+$output | ForEach-Object { $_.ToString() }
+exit $exitCode
 '@
     $runnerFile = Join-Path $script:TemporaryRoot ('codex-runner.{0}.ps1' -f [Guid]::NewGuid().ToString('N'))
     [IO.File]::WriteAllText($runnerFile, $runner, $script:Utf8NoBom)
@@ -495,16 +500,25 @@ function Assert-ValidRecoveryState {
         Stop-KeyProxyInstall 'O manifesto de recuperação não é um arquivo regular.'
     }
     try {
-        $state = Get-Content -LiteralPath $script:StateFile -Raw | ConvertFrom-Json
+        $state = [IO.File]::ReadAllText($script:StateFile, [Text.Encoding]::UTF8) | ConvertFrom-Json
     }
     catch {
         Stop-KeyProxyInstall 'O manifesto de recuperação não contém JSON válido.'
     }
+    $requiredProperties = @('version', 'createdBy', 'configPath', 'configExisted', 'configBackup')
+    foreach ($name in $requiredProperties) {
+        if ($state.PSObject.Properties.Name -notcontains $name) {
+            Stop-KeyProxyInstall 'O manifesto de recuperação é inválido para este CODEX_HOME; nenhum arquivo será sobrescrito.'
+        }
+    }
+    $configExistedProperty = $state.PSObject.Properties['configExisted']
+    $configExistedIsBoolean = $null -ne $configExistedProperty -and
+        $configExistedProperty.Value -is [System.Boolean]
     if ($state.version -ne 1 -or $state.createdBy -ne 'keyproxy-codex-install' -or
-        $state.configPath -ne $script:ConfigFile -or $state.configExisted -isnot [bool]) {
+        $state.configPath -ne $script:ConfigFile -or -not $configExistedIsBoolean) {
         Stop-KeyProxyInstall 'O manifesto de recuperação é inválido para este CODEX_HOME; nenhum arquivo será sobrescrito.'
     }
-    if ($state.configExisted) {
+    if ([bool]$configExistedProperty.Value) {
         $backupPath = if ([string]::IsNullOrWhiteSpace([string]$state.configBackup)) { '' } else { [IO.Path]::GetFullPath([string]$state.configBackup) }
         $configPath = [IO.Path]::GetFullPath($script:ConfigFile)
         if ([string]::IsNullOrWhiteSpace($backupPath) -or
@@ -1056,13 +1070,13 @@ function Validate-Api {
     }
 
     if ($result.Output -notcontains 'model: gpt-5.6-sol') {
-        Stop-KeyProxyInstall 'A chamada não confirmou o modelo gpt-5.6-sol.'
+        Stop-KeyProxyInstall 'A chamada não confirmou o modelo gpt-5.6-sol.' 2
     }
     if ($result.Output -notcontains 'provider: keyproxy') {
-        Stop-KeyProxyInstall 'A chamada não confirmou o provider keyproxy.'
+        Stop-KeyProxyInstall 'A chamada não confirmou o provider keyproxy.' 2
     }
     if ($result.Output -notcontains 'KEYPROXY_OK') {
-        Stop-KeyProxyInstall 'A chamada terminou, mas não retornou KEYPROXY_OK.'
+        Stop-KeyProxyInstall 'A chamada terminou, mas não retornou KEYPROXY_OK.' 2
     }
     if (Test-KeyProxyMcpFailure -Lines $result.Output) {
         Write-KeyProxyWarning 'A resposta do modelo funcionou, mas o MCP keyproxy falhou ao iniciar.'
