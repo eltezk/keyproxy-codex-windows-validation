@@ -13,6 +13,7 @@ on:
       - 'keyproxy-codex-windows-native-selftest.ps1'
       - 'site/**'
       - 'scripts/build-public-bundle.sh'
+      - 'keyproxy-hub-setup/**'
       - '.github/workflows/release-gate.yml'
 
 permissions:
@@ -65,6 +66,17 @@ jobs:
           ! grep -ERi 'script (é|esta|está) (digitalmente )?assinado|assinatura (digital )?verificada' \
             dist/keyproxy-codex-site/COPIAR-E-COLAR-NO-SITE.*
           ! find "$upload" -maxdepth 1 -type f -name 'keyproxy-codex-install*' -print -quit | grep -q .
+      - name: Test and build unified setup package
+        shell: bash
+        run: |
+          bash -n keyproxy-hub-setup/keyproxy-hub.sh \
+            keyproxy-hub-setup/tests/unix-selftest.sh \
+            keyproxy-hub-setup/scripts/build-package.sh
+          bash keyproxy-hub-setup/tests/unix-selftest.sh
+          bash keyproxy-hub-setup/claude/tests/unix-selftest.sh
+          bash keyproxy-hub-setup/codex/keyproxy-codex-unix-selftest.sh \
+            keyproxy-hub-setup/codex/keyproxy-codex-install.sh
+          bash keyproxy-hub-setup/scripts/build-package.sh
       - name: Upload ready-to-publish package
         uses: actions/upload-artifact@v4
         with:
@@ -72,6 +84,31 @@ jobs:
           path: dist/keyproxy-codex-site/
           if-no-files-found: error
           retention-days: 30
+      - name: Upload unified setup package
+        uses: actions/upload-artifact@v4
+        with:
+          name: KEYPROXY-HUB-SETUP
+          path: keyproxy-hub-setup/dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-keyproxy-hub:
+    name: Unified setup PowerShell 7
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test unified setup launcher and Claude module
+        shell: pwsh
+        run: |
+          $env:NO_COLOR = '1'
+          & .\keyproxy-hub-setup\tests\windows-selftest.ps1
+          & .\keyproxy-hub-setup\claude\tests\windows-selftest.ps1
+      - name: Validate unified setup package
+        shell: pwsh
+        run: |
+          $env:NO_COLOR = '1'
+          & .\keyproxy-hub-setup\keyproxy-hub.ps1 validate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   windows-powershell-51:
     name: Windows PowerShell 5.1
@@ -91,6 +128,18 @@ jobs:
           $actual = (Get-FileHash .\keyproxy-codex-install-windows.ps1 -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actual -ne $expected) { throw "SHA-256 divergente: $actual" }
           Write-Output "windows-get-filehash=ok $actual"
+      - name: Test unified setup launcher and Claude module
+        shell: powershell
+        run: |
+          $env:NO_COLOR = '1'
+          & .\keyproxy-hub-setup\tests\windows-selftest.ps1
+          & .\keyproxy-hub-setup\claude\tests\windows-selftest.ps1
+      - name: Validate unified setup package
+        shell: powershell
+        run: |
+          $env:NO_COLOR = '1'
+          & .\keyproxy-hub-setup\keyproxy-hub.ps1 validate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   powershell-7:
     name: PowerShell 7
