@@ -50,6 +50,12 @@ https://keyproxyhub.store/downloads/codex/install.ps1.sha256
 
 Não é necessário editar URLs nem comandos.
 
+### 4. Pacote unificado para operação técnica
+
+A mesma execução do **Release gate** também publica o artifact privado `KEYPROXY-HUB-SETUP`. Ele contém menu único para Claude Code e Codex CLI em macOS/Linux e Windows, validação de checksums, status sanitizado, reversão confirmada somente do Claude e orientação manual segura para backups do Codex.
+
+Esse artifact não substitui os quatro arquivos públicos de instalação Codex. Extraia-o e consulte `keyproxy-hub-setup/README.md` antes de executar o menu.
+
 ## Como ficou para o cliente
 
 ### Instalação rápida — macOS/Linux
@@ -90,10 +96,12 @@ Para reduzir avisos do Windows/SmartScreen de forma adicional no futuro, será n
 2. instalam ou reparam o Codex CLI pelo instalador oficial quando necessário;
 3. solicitam a API key sem exibi-la;
 4. configuram somente o modelo `gpt-5.6-sol`, a API e o MCP KeyProxy;
-5. preservam preferências compatíveis e criam backup;
-6. removem o OAuth oficial anterior;
-7. validam provider, modelo, MCP e conexão;
-8. fazem rollback se a configuração local falhar.
+5. preservam preferências compatíveis, criam backup e registram um manifesto de recuperação sem segredo;
+6. validam provider, modelo, MCP e conexão com prazo limitado;
+7. removem o OAuth oficial somente após uma conexão bem-sucedida (se o teste de API for ignorado, falhar ou expirar, preservam o login);
+8. fazem rollback se a validação local falhar.
+
+Em VPS Linux por SSH, use um usuário normal (sem `sudo`), Bash ou Zsh e conectividade HTTPS/DNS para `chatgpt.com`, `releases.openai.com` e `api.keyproxyhub.store`. O instalador Bash exige `curl` quando precisar instalar ou reparar o Codex, para validar o destino final do download oficial. Para automação controlada, use `--api-key-stdin` e forneça a chave por canal protegido; nunca a passe como argumento nem use um comando que a deixe gravada no histórico do shell.
 
 Compatibilidade:
 
@@ -150,7 +158,7 @@ shasum -a 256 keyproxy-codex-install-windows.ps1 > keyproxy-codex-install-window
 bash scripts/build-public-bundle.sh
 ```
 
-O `.ps1` interno permanece UTF-8 sem BOM e CRLF. Qualquer mudança de bytes exige novo checksum e gate Windows.
+O `.ps1` interno permanece UTF-8 sem BOM e LF, conforme `.gitattributes`, para que o checksum seja idêntico nos runners Unix e Windows. Qualquer mudança de bytes exige novo checksum e gate Windows.
 
 ## Rollback
 
